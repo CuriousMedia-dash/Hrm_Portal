@@ -31,7 +31,7 @@ create table if not exists public.employees (
   status          text not null default 'active'
                     check (status in ('active','on_notice','inactive','pending')),
   notice_end_date     date,                -- last working day; HR alerted 15 days before
-  internship_end_date date,                -- defaults to joining + 6 months when empty
+  internship_end_date date,                -- defaults to joining + 3 months when empty
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );

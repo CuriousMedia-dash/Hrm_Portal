@@ -6,6 +6,7 @@ import {
   LEAVE_TYPES, labelOf, formatDate, formatRange, todayISO,
   workingDaysExcludingHolidays
 } from '../lib/format.js'
+import { INTERN_LEAVE_PER_MONTH } from '../lib/policy.js'
 import Avatar from '../components/Avatar.jsx'
 import Badge from '../components/Badge.jsx'
 import Modal from '../components/Modal.jsx'
@@ -115,24 +116,66 @@ function MyLeave() {
     .map((t) => balances.find((b) => b.leave_type === t.value))
     .filter(Boolean)
 
+  const isIntern = employee?.employment_type === 'intern'
+
+  // For an intern the year's number is meaningless — what matters is
+  // whether this month's single day has been used.
+  const thisMonth = todayISO().slice(0, 7)
+  const usedThisMonth = requests
+    .filter((r) => ['pending', 'approved'].includes(r.status) && r.start_date.startsWith(thisMonth))
+    .reduce((sum, r) => sum + Number(r.days || 0), 0)
+  const monthLabel = new Date().toLocaleDateString('en-IN', { month: 'long' })
+  const usedThisYear = requests
+    .filter((r) => ['pending', 'approved'].includes(r.status) &&
+                   r.start_date.startsWith(String(year)))
+    .reduce((sum, r) => sum + Number(r.days || 0), 0)
+
   return (
     <div className="stack">
       <section className="card">
         <div className="card-head">
           <div>
             <h2>Balance</h2>
-            <p className="sub">Entitlement for {year}, minus days already approved</p>
+            <p className="sub">
+              {isIntern
+                ? `One day a month — ${monthLabel}'s allowance`
+                : `Entitlement for ${year}, minus days already approved`}
+            </p>
           </div>
         </div>
         <div className="card-body">
-          {employee?.employment_type === 'intern' && (
-            <div className="alert alert-info" style={{ marginBottom: 14 }}>
-              <Icon name="info" size={16} />
-              <span>As an intern you get <strong>one leave day per month</strong>. The year's
-                allowance is 12, but it cannot be taken in a lump — one day, each month.</span>
-            </div>
-          )}
-          {loading ? (
+          {isIntern ? (
+            loading ? <span className="skel" style={{ display: 'block', height: 110 }} /> : (
+              <>
+                <div className="balance-grid">
+                  <div className="balance">
+                    <div className="type">Casual leave · {monthLabel}</div>
+                    <div className="num">
+                      {Math.max(0, INTERN_LEAVE_PER_MONTH - usedThisMonth)}
+                      <small> / {INTERN_LEAVE_PER_MONTH} day this month</small>
+                    </div>
+                    <div className={`meter ${usedThisMonth >= INTERN_LEAVE_PER_MONTH ? 'is-out' : ''}`}>
+                      <span style={{ width: `${Math.min(100, (usedThisMonth / INTERN_LEAVE_PER_MONTH) * 100)}%` }} />
+                    </div>
+                    <div className="note">
+                      {usedThisMonth >= INTERN_LEAVE_PER_MONTH
+                        ? `Used for ${monthLabel} — resets on the 1st`
+                        : 'Available'}
+                    </div>
+                  </div>
+                  <div className="balance">
+                    <div className="type">Taken this year</div>
+                    <div className="num">{usedThisYear}<small> days</small></div>
+                    <div className="note">One per month, across {year}</div>
+                  </div>
+                </div>
+                <p className="dim" style={{ fontSize: '.82rem', margin: '12px 0 0' }}>
+                  As an intern you get one leave day each month. It does not carry over —
+                  an unused day is gone at month end.
+                </p>
+              </>
+            )
+          ) : loading ? (
             <div className="balance-grid">
               {[0, 1, 2, 3].map((i) => <span className="skel" key={i} style={{ height: 96 }} />)}
             </div>
@@ -377,6 +420,10 @@ function Approvals() {
 /* ------------------------------------------------------------------ */
 function ApplyForm({ onClose, onSaved }) {
   const { employee } = useAuth()
+  // interns hold casual leave only; 'earned' is legacy and no longer granted
+  const availableTypes = employee?.employment_type === 'intern'
+    ? LEAVE_TYPES.filter((t) => t.value === 'casual')
+    : LEAVE_TYPES.filter((t) => t.value !== 'earned')
   const toast = useToast()
   const [leaveType, setLeaveType] = useState('casual')
   const [startDate, setStartDate] = useState(todayISO())
@@ -407,6 +454,21 @@ function ApplyForm({ onClose, onSaved }) {
     if (new Date(endDate) < new Date(startDate)) { setError('The end date cannot be before the start date.'); return }
     if (days <= 0) { setError('That range has no working days in it.'); return }
 
+    if (employee.employment_type === 'intern') {
+      if (startDate.slice(0, 7) !== endDate.slice(0, 7)) {
+        setError('An intern’s leave cannot span two months — raise one request per month.')
+        return
+      }
+      if (days > INTERN_LEAVE_PER_MONTH) {
+        setError(`Interns get ${INTERN_LEAVE_PER_MONTH} leave day per month.`)
+        return
+      }
+    }
+    if (employee?.employment_type === 'intern' && days > INTERN_LEAVE_PER_MONTH) {
+      setError(`Interns get ${INTERN_LEAVE_PER_MONTH} leave day per month — pick a single day.`)
+      return
+    }
+
     setBusy(true)
     const { error: saveError } = await supabase.from('leave_requests').insert({
       employee_id: employee.id,
@@ -430,7 +492,7 @@ function ApplyForm({ onClose, onSaved }) {
         <div className="field">
           <label htmlFor="leave_type">Leave type</label>
           <select id="leave_type" value={leaveType} onChange={(e) => setLeaveType(e.target.value)}>
-            {LEAVE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            {availableTypes.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         </div>
 

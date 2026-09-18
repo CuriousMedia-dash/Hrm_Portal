@@ -145,7 +145,7 @@ the row-level security would not return it even if the panel asked.
 | **Super admin** | `role = 'super_admin'` | Everything HR has, plus granting roles, deleting employees, and the company-wide Activity page |
 | **HR admin / Manager** | `role = 'hr_admin'` / `'manager'` | Their own attendance and leave like anyone else, plus approvals — HR for everyone, a manager for their own department |
 | **Associate** | `role = 'employee'` | Own attendance, leave, claims, documents |
-| **Intern** | `employment_type = 'intern'` | An associate with one leave day per month |
+| **Intern** | `employment_type = 'intern'` | An associate with one leave day per month; internship runs 3 months |
 
 Interns are not a separate role on purpose: their permissions are an
 associate's, only the entitlement differs.
@@ -250,12 +250,12 @@ The 2026 calendar is seeded by `supabase/add_holidays_and_leave_policy.sql`.
 The bell refreshes every five minutes and whenever it is opened.
 
 HR sees: pending leave, pending reimbursements, birthdays within 7 days,
-interns converting within 30 days, and notice periods ending within 15 days.
+interns converting within 21 days, and notice periods ending within 15 days.
 Employees see their own request outcomes and anything missing from their profile.
 
 Two dates drive the last two:
 
-- **Internship converts on** — set per intern, or left empty to mean six months
+- **Internship converts on** — set per intern, or left empty to mean three months
   from the joining date.
 - **Last working day** — set when someone's status becomes On notice.
 

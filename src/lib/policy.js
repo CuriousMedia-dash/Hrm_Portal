@@ -5,9 +5,9 @@
  */
 export const LATE_AFTER = { hour: 10, minute: 20 }   // arrivals after 10:20 are late
 export const MIN_WORK_HOURS = 8                       // hours before check-out is allowed
-export const INTERNSHIP_MONTHS = 6                    // intern -> full time
+export const INTERNSHIP_MONTHS = 3                    // intern -> full time
 export const NOTICE_WARN_DAYS = 15                    // warn this far before the last working day
-export const INTERN_WARN_DAYS = 30                    // warn this far before conversion
+export const INTERN_WARN_DAYS = 21                    // warn this far before conversion
 
 export const lateAfterLabel = `${LATE_AFTER.hour}:${String(LATE_AFTER.minute).padStart(2, '0')} AM`
 

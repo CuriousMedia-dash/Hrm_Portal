@@ -52,7 +52,7 @@ alter table public.employees add column if not exists internship_end_date  date;
 comment on column public.employees.notice_end_date is
   'Last working day. HR is alerted 15 days before.';
 comment on column public.employees.internship_end_date is
-  'When the internship converts. Defaults to joining date + 6 months if left empty.';
+  'When the internship converts. Defaults to joining date + 3 months if left empty.';
 
 -- ---------------------------------------------------------------------
 -- 3. Late arrivals — anything after 10:20 India time
