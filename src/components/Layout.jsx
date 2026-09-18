@@ -15,6 +15,7 @@ const NAV = [
   { to: '/attendance', label: 'Attendance', icon: 'clock',    section: 'People' },
   { to: '/leave',      label: 'Leave',      icon: 'calendar', section: 'People' },
   { to: '/reimbursements', label: 'Reimbursements', icon: 'wallet', section: 'People' },
+  { to: '/holidays',   label: 'Holidays',   icon: 'gift',     section: 'Company' },
   { to: '/profile',    label: 'My profile', icon: 'user',     section: 'Account' }
 ]
 
@@ -24,6 +25,7 @@ const TITLES = {
   '/attendance': 'Attendance',
   '/leave': 'Leave',
   '/reimbursements': 'Reimbursements',
+  '/holidays': 'Holiday calendar',
   '/profile': 'My profile'
 }
 

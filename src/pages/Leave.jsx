@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabaseClient.js'
 import { useAuth } from '../lib/auth.jsx'
 import { useToast } from '../components/Toast.jsx'
 import {
-  LEAVE_TYPES, labelOf, formatDate, formatRange, todayISO, workingDaysBetween
+  LEAVE_TYPES, labelOf, formatDate, formatRange, todayISO,
+  workingDaysExcludingHolidays
 } from '../lib/format.js'
 import Avatar from '../components/Avatar.jsx'
 import Badge from '../components/Badge.jsx'
@@ -376,10 +377,19 @@ function ApplyForm({ onClose, onSaved }) {
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [holidays, setHolidays] = useState([])
+
+  // company holidays inside the range should not eat someone's balance
+  useEffect(() => {
+    let active = true
+    supabase.from('holidays').select('start_date, end_date')
+      .then(({ data }) => { if (active) setHolidays(data || []) })
+    return () => { active = false }
+  }, [])
 
   const days = useMemo(
-    () => workingDaysBetween(startDate, endDate),
-    [startDate, endDate]
+    () => workingDaysExcludingHolidays(startDate, endDate, holidays),
+    [startDate, endDate, holidays]
   )
 
   async function handleSubmit(event) {
@@ -406,7 +416,7 @@ function ApplyForm({ onClose, onSaved }) {
   }
 
   return (
-    <Modal title="Apply for leave" subtitle="Weekends are excluded from the day count" onClose={onClose}>
+    <Modal title="Apply for leave" subtitle="Weekends and company holidays are excluded" onClose={onClose}>
       {error && <div className="alert alert-bad"><Icon name="alert" size={16} /><span>{error}</span></div>}
 
       <form onSubmit={handleSubmit}>
@@ -443,6 +453,7 @@ function ApplyForm({ onClose, onSaved }) {
           <Icon name="info" size={16} />
           <span>
             {formatDate(startDate)} → {formatDate(endDate)} · <strong>{days}</strong> working day{days === 1 ? '' : 's'}
+            <span className="dim"> — weekends and company holidays excluded</span>
           </span>
         </div>
 

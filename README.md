@@ -194,10 +194,34 @@ Both live in `src/lib/policy.js` (for the interface) and
 `supabase/add_work_rules.sql` (for the database). **Change them in both places**
 or they will disagree — the database wins, and the interface will look broken.
 
-Leave types are casual, sick, earned and **maternity** (which replaced unpaid).
-Half-day leave was removed — leave is counted in whole working days.
-New joiners are seeded 12 casual / 6 sick / 15 earned / 0 maternity; HR grants
-maternity days per person when they apply.
+Half-day leave was removed — leave is counted in whole working days, and
+weekends and company holidays are skipped automatically.
+
+**Entitlements**, granted on hire and re-granted when employment type changes:
+
+| Leave type | Intern | Everyone else |
+|---|---|---|
+| Casual | 1 | 10 |
+| Sick | — | 12 |
+| Maternity | — | 182 (6 months) |
+| Paternity | — | 15 |
+| Family marriage | — | 3 |
+| Own marriage | — | 10 |
+
+Maternity and paternity sit on every record and go unused where they don't
+apply — simpler than asking HR to grant them case by case. To change the
+numbers, edit `grant_leave_balances()` in `supabase/schema.sql` and re-run it.
+
+When an intern's employment type is changed to full time, a trigger re-grants
+their balances on the new basis automatically.
+
+## Holiday calendar
+
+**Holidays** in the sidebar, visible to everyone, editable by HR only. Entries
+can span days (Diwali, Dussehra, the summer and winter breaks). Leave requests
+skip these dates, so a week off over Diwali does not eat someone's casual leave.
+
+The 2026 calendar is seeded by `supabase/add_holidays_and_leave_policy.sql`.
 
 ## Alerts
 

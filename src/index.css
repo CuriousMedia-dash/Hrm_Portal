@@ -779,3 +779,25 @@ tbody tr:hover .row-actions .btn { opacity: 1; }
 }
 .report-choice strong { display: block; font-size: .92rem; margin-bottom: 4px; }
 .report-choice p { font-size: .82rem; margin-bottom: 11px; }
+
+/* ===================================================================
+   Holiday calendar
+=================================================================== */
+.holiday-row {
+  display: flex; align-items: center; gap: 13px;
+  padding: 11px 18px; border-bottom: 1px solid var(--line);
+}
+.holiday-row:last-child { border-bottom: 0; }
+.holiday-row:hover { background: var(--surface-2); }
+.holiday-row.is-past { opacity: .5; }
+.holiday-date {
+  width: 46px; flex: none; text-align: center; border-radius: var(--r);
+  padding: 5px 0; background: var(--brand-soft); color: var(--brand);
+  border: 1px solid var(--brand-line);
+}
+.holiday-date.is-break { background: var(--good-soft); color: var(--good); border-color: var(--good-line); }
+.holiday-date strong { display: block; font-size: 1.02rem; font-weight: 680; line-height: 1.15; }
+.holiday-date span { display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.holiday-meta { flex: 1; min-width: 0; }
+.holiday-meta strong { display: flex; align-items: center; gap: 8px; font-size: .92rem; font-weight: 570; }
+.holiday-meta > span { display: block; font-size: .79rem; color: var(--ink-3); margin-top: 1px; }

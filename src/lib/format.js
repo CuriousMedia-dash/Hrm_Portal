@@ -1,8 +1,12 @@
 export const LEAVE_TYPES = [
-  { value: 'casual', label: 'Casual leave' },
-  { value: 'sick',   label: 'Sick leave' },
-  { value: 'earned', label: 'Earned leave' },
-  { value: 'maternity', label: 'Maternity leave' }
+  { value: 'casual',          label: 'Casual leave' },
+  { value: 'sick',            label: 'Sick leave' },
+  { value: 'maternity',       label: 'Maternity leave' },
+  { value: 'paternity',       label: 'Paternity leave' },
+  { value: 'family_marriage', label: "Family marriage" },
+  { value: 'own_marriage',    label: 'Own marriage' },
+  // kept so older records still render; no longer granted
+  { value: 'earned',          label: 'Earned leave' }
 ]
 
 export const ATTENDANCE_STATUSES = [
@@ -124,4 +128,33 @@ export function shortDate(iso) {
   const d = new Date(`${iso}T00:00:00`)
   if (Number.isNaN(d.getTime())) return '—'
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+}
+
+/** Every date between two ISO dates, inclusive. */
+export function datesBetween(startISO, endISO) {
+  const out = []
+  const cursor = new Date(`${startISO}T00:00:00`)
+  const end = new Date(`${endISO}T00:00:00`)
+  while (cursor <= end) {
+    out.push(todayISO(cursor))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return out
+}
+
+/**
+ * Working days between two dates, excluding weekends and any company
+ * holiday that falls inside the range.
+ * `holidays` is a list of {start_date, end_date}.
+ */
+export function workingDaysExcludingHolidays(startISO, endISO, holidays = []) {
+  if (!startISO || !endISO) return 0
+  const blocked = new Set()
+  for (const h of holidays) {
+    for (const day of datesBetween(h.start_date, h.end_date)) blocked.add(day)
+  }
+  return datesBetween(startISO, endISO).filter((iso) => {
+    const day = new Date(`${iso}T00:00:00`).getDay()
+    return day !== 0 && day !== 6 && !blocked.has(iso)
+  }).length
 }

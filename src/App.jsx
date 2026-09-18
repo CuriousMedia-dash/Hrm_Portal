@@ -8,6 +8,7 @@ import Employees from './pages/Employees.jsx'
 import Attendance from './pages/Attendance.jsx'
 import Leave from './pages/Leave.jsx'
 import Reimbursements from './pages/Reimbursements.jsx'
+import Holidays from './pages/Holidays.jsx'
 import Profile from './pages/Profile.jsx'
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/leave" element={<Leave />} />
           <Route path="/reimbursements" element={<Reimbursements />} />
+          <Route path="/holidays" element={<Holidays />} />
           <Route path="/profile" element={<Profile />} />
         </Route>
       </Route>
