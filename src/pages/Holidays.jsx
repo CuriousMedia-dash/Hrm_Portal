@@ -199,7 +199,10 @@ export default function Holidays() {
 }
 
 function HolidayForm({ value, onClose, onSaved }) {
-  const [form, setForm] = useState({ ...BLANK, ...value })
+  const [form, setForm] = useState(() => {
+    const merged = { ...BLANK, ...value }
+    return Object.fromEntries(Object.entries(merged).map(([k, v]) => [k, v ?? '']))
+  })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const isNew = !value.id
@@ -208,16 +211,16 @@ function HolidayForm({ value, onClose, onSaved }) {
   async function submit(event) {
     event.preventDefault()
     setError('')
-    if (form.name.trim().length < 2) { setError('Give the holiday a name.'); return }
+    if ((form.name ?? '').trim().length < 2) { setError('Give the holiday a name.'); return }
     if (form.end_date < form.start_date) { setError('The end date cannot be before the start date.'); return }
 
     setBusy(true)
     const payload = {
-      name: form.name.trim(),
+      name: (form.name ?? '').trim(),
       start_date: form.start_date,
       end_date: form.end_date || form.start_date,
       kind: form.kind,
-      note: form.note?.trim() || null
+      note: (form.note ?? '').trim() || null
     }
     const { error: saveError } = isNew
       ? await supabase.from('holidays').insert(payload)

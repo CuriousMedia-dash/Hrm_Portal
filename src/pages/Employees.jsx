@@ -277,9 +277,21 @@ function Fact({ icon, label, value }) {
   )
 }
 
+/**
+ * A record straight from the database has nulls where the form wants empty
+ * strings — spreading it over BLANK would put those nulls back, and the
+ * first .trim() then throws.
+ */
+function toFormState(record) {
+  const merged = { ...BLANK, ...record }
+  return Object.fromEntries(
+    Object.entries(merged).map(([key, val]) => [key, val ?? ''])
+  )
+}
+
 function EmployeeForm({ value, people, onClose, onSaved }) {
   const toast = useToast()
-  const [form, setForm] = useState({ ...BLANK, ...value, manager_id: value.manager_id || '' })
+  const [form, setForm] = useState(() => toFormState(value))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -291,18 +303,20 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
     event.preventDefault()
     setError(''); setBusy(true)
 
+    const text = (value) => (value ?? '').toString().trim() || null
+
     const payload = {
-      full_name: form.full_name.trim(),
-      email: form.email.trim().toLowerCase() || null,
-      employee_code: form.employee_code.trim() || null,
-      phone: form.phone.trim() || null,
-      department: form.department.trim() || null,
-      designation: form.designation.trim() || null,
+      full_name: text(form.full_name),
+      email: text(form.email)?.toLowerCase() ?? null,
+      employee_code: text(form.employee_code),
+      phone: text(form.phone),
+      department: text(form.department),
+      designation: text(form.designation),
       employment_type: form.employment_type,
       date_of_joining: form.date_of_joining || null,
       date_of_birth: form.date_of_birth || null,
-      location: form.location.trim() || null,
-      address: form.address.trim() || null,
+      location: text(form.location),
+      address: text(form.address),
       manager_id: form.manager_id || null,
       status: form.status,
       role: form.role,
@@ -310,23 +324,36 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
       internship_end_date: form.employment_type === 'intern' ? (form.internship_end_date || null) : null
     }
 
-    const { error: saveError } = isNew
-      ? await supabase.from('employees').insert(payload)
-      : await supabase.from('employees').update(payload).eq('id', value.id)
-
-    setBusy(false)
-    if (saveError) {
-      setError(saveError.code === '23505'
-        ? 'That email or employee code already belongs to another record.'
-        : saveError.message)
+    if (!payload.full_name) {
+      setBusy(false)
+      setError('A name is required.')
       return
     }
-    onSaved(isNew ? `${payload.full_name} added to the directory.` : 'Changes saved.')
+
+    try {
+      const { error: saveError } = isNew
+        ? await supabase.from('employees').insert(payload)
+        : await supabase.from('employees').update(payload).eq('id', value.id)
+
+      if (saveError) {
+        setError(saveError.code === '23505'
+          ? 'That email or employee code already belongs to another record.'
+          : saveError.message)
+        return
+      }
+      onSaved(isNew ? `${payload.full_name} added to the directory.` : 'Changes saved.')
+    } catch (err) {
+      // never leave the button spinning on an unexpected failure
+      setError(err?.message || 'Something went wrong while saving.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function handleDelete() {
     setBusy(true)
     const { error: delError } = await supabase.from('employees').delete().eq('id', value.id)
+      .then((r) => r, (err) => ({ error: err }))
     setBusy(false)
     setConfirmDelete(false)
     if (delError) { setError(delError.message); toast.error(delError.message) }
