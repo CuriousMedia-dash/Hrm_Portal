@@ -60,10 +60,12 @@ export function AuthProvider({ children }) {
     user: session?.user ?? null,
     employee,
     loading,
-    isAdmin: employee?.role === 'hr_admin',
+    // a super admin satisfies every HR check, matching is_hr_admin() in the database
+    isSuperAdmin: employee?.role === 'super_admin',
+    isAdmin: employee?.role === 'hr_admin' || employee?.role === 'super_admin',
     isManager: employee?.role === 'manager',
-    // anyone who can approve something: HR, or a manager for their department
-    isApprover: employee?.role === 'hr_admin' || employee?.role === 'manager',
+    // anyone who can approve something: HR, super admin, or a manager for their department
+    isApprover: ['hr_admin', 'super_admin', 'manager'].includes(employee?.role),
     configured: supabaseConfigured,
     refreshEmployee: () => loadEmployee(session?.user?.id),
     signIn: (email, password) =>

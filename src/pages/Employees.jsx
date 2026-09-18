@@ -13,7 +13,8 @@ import Icon from '../components/Icon.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { SkeletonRows } from '../components/Skeleton.jsx'
 import {
-  INTERNSHIP_MONTHS, INTERN_WARN_DAYS, NOTICE_WARN_DAYS, addMonths, conversionDate
+  INTERNSHIP_MONTHS, INTERN_WARN_DAYS, NOTICE_WARN_DAYS, addMonths, conversionDate,
+  ROLES, tierOf
 } from '../lib/policy.js'
 import DocumentsPanel from '../components/DocumentsPanel.jsx'
 import EmergencyContacts from '../components/EmergencyContacts.jsx'
@@ -204,8 +205,9 @@ export default function Employees() {
             <div>
               <div className="row" style={{ gap: 7 }}>
                 <Badge value={viewing.status} label={labelOf(EMPLOYEE_STATUSES, viewing.status)} />
-                {viewing.role === 'hr_admin' && <span className="chip chip-brand"><Icon name="shield" size={12} /> HR admin</span>}
-                {viewing.role === 'manager' && <span className="chip chip-brand"><Icon name="users" size={12} /> Manager</span>}
+                <span className="chip chip-brand">
+                  <Icon name={viewing.role === 'manager' ? 'users' : 'shield'} size={12} /> {tierOf(viewing)}
+                </span>
               </div>
               <div className="dim" style={{ fontSize: '.84rem', marginTop: 5 }}>
                 {viewing.email
@@ -291,6 +293,7 @@ function toFormState(record) {
 
 function EmployeeForm({ value, people, onClose, onSaved }) {
   const toast = useToast()
+  const { isSuperAdmin } = useAuth()
   const [form, setForm] = useState(() => toFormState(value))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -447,14 +450,13 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
             </div>
             <div className="field">
               <label htmlFor="role">Portal role</label>
-              <select id="role" value={form.role} onChange={set('role')}>
-                <option value="employee">Employee</option>
-                <option value="manager">Manager</option>
-                <option value="hr_admin">HR admin</option>
+              <select id="role" value={form.role} onChange={set('role')} disabled={!isSuperAdmin}>
+                {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
               <span className="hint">
-                Managers approve leave and regularizations for their own department.
-                HR admins manage everyone.
+                {isSuperAdmin
+                  ? ROLES.find((r) => r.value === form.role)?.hint
+                  : 'Only a super admin can change someone’s role.'}
               </span>
             </div>
           </div>
@@ -492,7 +494,7 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
           </div>
 
           <div className="form-actions">
-            {!isNew && (
+            {!isNew && isSuperAdmin && (
               <button type="button" className="btn btn-danger-ghost push" onClick={() => setConfirmDelete(true)} disabled={busy}>
                 <Icon name="trash" size={14} /> Delete
               </button>

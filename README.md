@@ -138,6 +138,26 @@ Employees see the state of their own requests, plus a nudge for any missing
 required document or emergency contact. They never see anyone else's data —
 the row-level security would not return it even if the panel asked.
 
+## The four tiers
+
+| Tier | Set by | What it adds |
+|---|---|---|
+| **Super admin** | `role = 'super_admin'` | Everything HR has, plus granting roles, deleting employees, and the company-wide Activity page |
+| **HR admin / Manager** | `role = 'hr_admin'` / `'manager'` | Their own attendance and leave like anyone else, plus approvals — HR for everyone, a manager for their own department |
+| **Associate** | `role = 'employee'` | Own attendance, leave, claims, documents |
+| **Intern** | `employment_type = 'intern'` | An associate with one leave day per month |
+
+Interns are not a separate role on purpose: their permissions are an
+associate's, only the entitlement differs.
+
+**Only a super admin can change a role.** `employees_guard_update()` resets the
+`role` column on any update made by HR, so the tier above them is the only way
+in — which is the point of having one.
+
+**Company activity** (super admin only) is every pending decision in one place:
+leave, claims and regularizations across all departments, headcount, who is in
+today, what is approved but unpaid, and which departments have no manager.
+
 ## Roles and approvals
 
 Three roles, set on the employee record: `employee`, `manager`, `hr_admin`.
@@ -201,14 +221,16 @@ weekends and company holidays are skipped automatically.
 
 | Leave type | Intern | Everyone else |
 |---|---|---|
-| Casual | 1 | 10 |
+| Casual | 12 — but **one per month** | 10 |
 | Sick | — | 12 |
 | Maternity | — | 182 (6 months) |
 | Paternity | — | 15 |
 | Family marriage | — | 3 |
 | Own marriage | — | 10 |
 
-Maternity and paternity sit on every record and go unused where they don't
+An intern's 12 casual days cannot be taken in a lump: `enforce_intern_leave_cap()`
+rejects a second day in the same calendar month, and a request that straddles two
+months. Maternity and paternity sit on every record and go unused where they don't
 apply — simpler than asking HR to grant them case by case. To change the
 numbers, edit `grant_leave_balances()` in `supabase/schema.sql` and re-run it.
 

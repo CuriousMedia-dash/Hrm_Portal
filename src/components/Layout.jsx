@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient.js'
 import { useAuth } from '../lib/auth.jsx'
 import { getTheme, applyTheme } from '../lib/theme.js'
+import { tierOf } from '../lib/policy.js'
 import { formatDate, todayISO } from '../lib/format.js'
 import Icon from './Icon.jsx'
 import Avatar from './Avatar.jsx'
@@ -11,6 +12,7 @@ import LateCounter from './LateCounter.jsx'
 
 const NAV = [
   { to: '/',           label: 'Dashboard',  icon: 'grid',     end: true, section: 'Overview' },
+  { to: '/activity',   label: 'Activity',   icon: 'trend',    section: 'Overview', superOnly: true },
   { to: '/employees',  label: 'Employees',  icon: 'users',    section: 'People', adminOnly: true },
   { to: '/attendance', label: 'Attendance', icon: 'clock',    section: 'People' },
   { to: '/leave',      label: 'Leave',      icon: 'calendar', section: 'People' },
@@ -26,11 +28,12 @@ const TITLES = {
   '/leave': 'Leave',
   '/reimbursements': 'Reimbursements',
   '/holidays': 'Holiday calendar',
+  '/activity': 'Company activity',
   '/profile': 'My profile'
 }
 
 export default function Layout() {
-  const { employee, user, isAdmin, isManager, isApprover, signOut } = useAuth()
+  const { employee, user, isAdmin, isManager, isApprover, isSuperAdmin, signOut } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [open, setOpen] = useState(false)
@@ -63,7 +66,8 @@ export default function Layout() {
     navigate('/login', { replace: true })
   }
 
-  const visibleNav = NAV.filter((item) => !item.adminOnly || isApprover)
+  const visibleNav = NAV.filter((item) =>
+    (!item.adminOnly || isApprover) && (!item.superOnly || isSuperAdmin))
   const sections = [...new Set(visibleNav.map((n) => n.section))]
 
   return (
@@ -117,7 +121,7 @@ export default function Layout() {
             <Avatar name={name} size="sm" />
             <div className="who">
               <strong>{name}</strong>
-              <span>{isAdmin ? 'HR admin' : isManager ? 'Manager' : 'Employee'}</span>
+              <span>{tierOf(employee)}</span>
             </div>
           </div>
 

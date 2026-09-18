@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import AdminRoute from './components/AdminRoute.jsx'
+import SuperRoute from './components/SuperRoute.jsx'
 import Layout from './components/Layout.jsx'
 import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -9,6 +10,7 @@ import Attendance from './pages/Attendance.jsx'
 import Leave from './pages/Leave.jsx'
 import Reimbursements from './pages/Reimbursements.jsx'
 import Holidays from './pages/Holidays.jsx'
+import Activity from './pages/Activity.jsx'
 import Profile from './pages/Profile.jsx'
 
 export default function App() {
@@ -20,6 +22,9 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route element={<AdminRoute />}>
             <Route path="/employees" element={<Employees />} />
+          </Route>
+          <Route element={<SuperRoute />}>
+            <Route path="/activity" element={<Activity />} />
           </Route>
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/leave" element={<Leave />} />

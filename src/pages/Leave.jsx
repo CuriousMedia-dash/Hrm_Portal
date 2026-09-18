@@ -125,6 +125,13 @@ function MyLeave() {
           </div>
         </div>
         <div className="card-body">
+          {employee?.employment_type === 'intern' && (
+            <div className="alert alert-info" style={{ marginBottom: 14 }}>
+              <Icon name="info" size={16} />
+              <span>As an intern you get <strong>one leave day per month</strong>. The year's
+                allowance is 12, but it cannot be taken in a lump — one day, each month.</span>
+            </div>
+          )}
           {loading ? (
             <div className="balance-grid">
               {[0, 1, 2, 3].map((i) => <span className="skel" key={i} style={{ height: 96 }} />)}

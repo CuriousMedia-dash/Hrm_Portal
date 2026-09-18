@@ -68,3 +68,26 @@ export function describeDays(days) {
   if (days === -1) return 'yesterday'
   return `${Math.abs(days)} days ago`
 }
+
+/* ------------------------------------------------------------------ */
+/* Who is who                                                          */
+/* ------------------------------------------------------------------ */
+
+export const ROLES = [
+  { value: 'employee',    label: 'Associate',   hint: 'Own attendance, leave, claims and documents' },
+  { value: 'manager',     label: 'Manager',     hint: 'The above, plus approvals for their department' },
+  { value: 'hr_admin',    label: 'HR admin',    hint: 'Everyone’s records, approvals and reports' },
+  { value: 'super_admin', label: 'Super admin', hint: 'Everything, plus granting roles and deleting people' }
+]
+
+/** The label a person carries in the interface. Interns are associates with a different entitlement. */
+export function tierOf(employee) {
+  if (!employee) return 'Employee'
+  if (employee.role === 'super_admin') return 'Super admin'
+  if (employee.role === 'hr_admin') return 'HR admin'
+  if (employee.role === 'manager') return 'Manager'
+  if (employee.employment_type === 'intern') return 'Intern'
+  return 'Associate'
+}
+
+export const INTERN_LEAVE_PER_MONTH = 1
