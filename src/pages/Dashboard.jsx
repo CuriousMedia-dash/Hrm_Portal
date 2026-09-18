@@ -14,6 +14,7 @@ import Icon from '../components/Icon.jsx'
 import MiniBars from '../components/MiniBars.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { SkeletonRows, SkeletonTiles } from '../components/Skeleton.jsx'
+import { MIN_WORK_HOURS, timeUntilCheckout } from '../lib/policy.js'
 
 function greeting() {
   const hour = new Date().getHours()
@@ -126,6 +127,11 @@ export default function Dashboard() {
 
   async function checkOut() {
     if (!myToday) return
+    const short = timeUntilCheckout(myToday.check_in)
+    if (short) {
+      toast.error(`You need ${MIN_WORK_HOURS} hours from check-in. ${short} to go.`)
+      return
+    }
     setBusy(true)
     const { data, error } = await supabase.from('attendance')
       .update({ check_out: new Date().toISOString() }).eq('id', myToday.id).select().single()
@@ -134,6 +140,16 @@ export default function Dashboard() {
     else { setMyToday(data); toast.success('Checked out. See you tomorrow.') }
   }
 
+  // re-render each minute so the countdown stays live
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => setTick((t) => t + 1), 60000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const remaining = myToday?.check_in && !myToday?.check_out
+    ? timeUntilCheckout(myToday.check_in)
+    : null
   const firstName = (employee?.full_name || '').split(' ')[0] || 'there'
 
   return (
@@ -149,9 +165,15 @@ export default function Dashboard() {
               <Icon name="clock" size={16} /> Check in
             </button>
           ) : !myToday?.check_out ? (
-            <button type="button" className="btn btn-2" onClick={checkOut} disabled={busy}>
-              <Icon name="clock" size={16} /> Check out
-            </button>
+            remaining ? (
+              <span className="chip" title={`Minimum ${MIN_WORK_HOURS} hours from check-in`}>
+                <Icon name="clock" size={14} /> Check out in {remaining}
+              </span>
+            ) : (
+              <button type="button" className="btn btn-2" onClick={checkOut} disabled={busy}>
+                <Icon name="clock" size={16} /> Check out
+              </button>
+            )
           ) : (
             <span className="chip"><Icon name="checkCircle" size={14} /> Day closed at {formatTime(myToday.check_out)}</span>
           )}
