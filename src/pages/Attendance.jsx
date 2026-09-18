@@ -282,6 +282,15 @@ function MyAttendance() {
             )}
         </div>
       </section>
+
+      {regularizing && (
+        <RegularizationForm
+          record={regularizing}
+          kind="late"
+          onClose={() => setRegularizing(null)}
+          onSaved={() => { setRegularizing(null); load() }}
+        />
+      )}
     </div>
   )
 }
