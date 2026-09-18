@@ -12,6 +12,10 @@ import Icon from '../components/Icon.jsx'
 import StatTile from '../components/StatTile.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { SkeletonRows } from '../components/Skeleton.jsx'
+import Modal from '../components/Modal.jsx'
+import RegularizationForm from '../components/RegularizationForm.jsx'
+import RegularizationQueue from '../components/RegularizationQueue.jsx'
+import { monthSummaryCSV, monthDetailCSV, downloadCSV } from '../lib/report.js'
 import {
   MIN_WORK_HOURS, lateAfterLabel, timeUntilCheckout, hoursWorked
 } from '../lib/policy.js'
@@ -20,7 +24,7 @@ const PILL_STATUSES = ['present', 'wfh', 'half_day', 'leave', 'absent']
 const PILL_LABEL = { present: 'Present', wfh: 'WFH', half_day: 'Half', leave: 'Leave', absent: 'Absent' }
 
 export default function Attendance() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, isApprover } = useAuth()
   const [tab, setTab] = useState('me')
 
   return (
@@ -29,10 +33,12 @@ export default function Attendance() {
         <div>
           <h1>Attendance</h1>
           <p className="sub">
-            {isAdmin ? 'Check yourself in, or mark the whole team for any day.' : 'Check in, check out and review your month.'}
+            {isApprover
+              ? 'Check yourself in, mark the team, and review regularization requests.'
+              : 'Check in, check out and review your month.'}
           </p>
         </div>
-        {isAdmin && (
+        {isApprover && (
           <div className="seg">
             <button type="button" className={tab === 'me' ? 'on' : ''} onClick={() => setTab('me')}>
               <Icon name="user" size={14} /> Mine
@@ -40,11 +46,16 @@ export default function Attendance() {
             <button type="button" className={tab === 'team' ? 'on' : ''} onClick={() => setTab('team')}>
               <Icon name="users" size={14} /> Team roster
             </button>
+            <button type="button" className={tab === 'requests' ? 'on' : ''} onClick={() => setTab('requests')}>
+              <Icon name="inbox" size={14} /> Requests
+            </button>
           </div>
         )}
       </div>
 
-      {isAdmin && tab === 'team' ? <TeamRoster /> : <MyAttendance />}
+      {isApprover && tab === 'team' ? <TeamRoster />
+        : isApprover && tab === 'requests' ? <RegularizationQueue />
+        : <MyAttendance />}
     </>
   )
 }
@@ -58,16 +69,23 @@ function MyAttendance() {
   const [today, setToday] = useState(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [regs, setRegs] = useState({})            // work_date -> request
+  const [regularizing, setRegularizing] = useState(null)
 
   const load = useCallback(async () => {
     if (!employee?.id) { setLoading(false); return }
     setLoading(true)
     const { from, to } = monthBounds(month)
-    const { data, error } = await supabase.from('attendance').select('*')
-      .eq('employee_id', employee.id).gte('work_date', from).lte('work_date', to)
-      .order('work_date', { ascending: false })
-    if (error) toast.error(error.message)
-    else setRows(data || [])
+    const [att, reg] = await Promise.all([
+      supabase.from('attendance').select('*')
+        .eq('employee_id', employee.id).gte('work_date', from).lte('work_date', to)
+        .order('work_date', { ascending: false }),
+      supabase.from('regularizations').select('*')
+        .eq('employee_id', employee.id).gte('work_date', from).lte('work_date', to)
+    ])
+    if (att.error) toast.error(att.error.message)
+    else setRows(att.data || [])
+    if (!reg.error) setRegs(Object.fromEntries((reg.data || []).map((r) => [`${r.work_date}-${r.kind}`, r])))
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employee?.id, month])
@@ -223,7 +241,7 @@ function MyAttendance() {
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>Date</th><th>Day</th><th>Status</th><th>In</th><th>Out</th><th className="right">Hours</th><th>Note</th></tr>
+                    <tr><th>Date</th><th>Day</th><th>Status</th><th>In</th><th>Out</th><th className="right">Hours</th><th>Note</th><th /></tr>
                   </thead>
                   <tbody>
                     {rows.map((row) => (
@@ -238,6 +256,24 @@ function MyAttendance() {
                         <td className="nowrap tnum">{formatTime(row.check_out)}</td>
                         <td className="right tnum">{hoursBetween(row.check_in, row.check_out) ?? '—'}</td>
                         <td className="dim">{row.note || '—'}</td>
+                        <td>
+                          <div className="row-actions">
+                            {row.is_late && !regs[`${row.work_date}-late`] && (
+                              <button type="button" className="btn btn-2 btn-sm"
+                                onClick={() => setRegularizing(row)}>
+                                Regularize
+                              </button>
+                            )}
+                            {regs[`${row.work_date}-late`] && (
+                              <Badge value={regs[`${row.work_date}-late`].status}
+                                label={regs[`${row.work_date}-late`].status === 'pending'
+                                  ? 'requested' : regs[`${row.work_date}-late`].status} />
+                            )}
+                            {row.late_waived && !regs[`${row.work_date}-late`] && (
+                              <span className="chip">waived</span>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -260,18 +296,31 @@ function TeamRoster() {
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState(null)
   const [search, setSearch] = useState('')
+  const [lateCounts, setLateCounts] = useState({})
+  const [sortByLate, setSortByLate] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportMonth, setReportMonth] = useState(date.slice(0, 7))
+  const [reportBusy, setReportBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [staff, marks] = await Promise.all([
+    const { from, to } = monthBounds(date.slice(0, 7))
+    const [staff, marks, lates] = await Promise.all([
       supabase.from('employees').select('id, full_name, email, department, designation')
         .in('status', ['active', 'on_notice']).order('full_name'),
-      supabase.from('attendance').select('*').eq('work_date', date)
+      supabase.from('attendance').select('*').eq('work_date', date),
+      // every late arrival in the month the chosen date belongs to
+      supabase.from('attendance').select('employee_id')
+        .eq('is_late', true).gte('work_date', from).lte('work_date', to)
     ])
-    if (staff.error || marks.error) toast.error((staff.error || marks.error).message)
-    else {
+    if (staff.error || marks.error || lates.error) {
+      toast.error((staff.error || marks.error || lates.error).message)
+    } else {
       setPeople(staff.data || [])
       setRecords(Object.fromEntries((marks.data || []).map((r) => [r.employee_id, r])))
+      const counts = {}
+      for (const row of lates.data || []) counts[row.employee_id] = (counts[row.employee_id] || 0) + 1
+      setLateCounts(counts)
     }
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -305,22 +354,63 @@ function TeamRoster() {
     }
   }
 
+  /** Pull a whole month and hand it back as a CSV file. */
+  async function downloadReport(kind) {
+    setReportBusy(true)
+    const { from, to } = monthBounds(reportMonth)
+    const [staff, records] = await Promise.all([
+      supabase.from('employees').select('id, full_name, department, designation')
+        .in('status', ['active', 'on_notice', 'inactive']).order('full_name'),
+      supabase.from('attendance').select('*').gte('work_date', from).lte('work_date', to)
+    ])
+    setReportBusy(false)
+
+    if (staff.error || records.error) {
+      toast.error((staff.error || records.error).message)
+      return
+    }
+
+    const label = new Date(`${from}T00:00:00`)
+      .toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+    const csv = kind === 'detail'
+      ? monthDetailCSV(staff.data || [], records.data || [], label)
+      : monthSummaryCSV(staff.data || [], records.data || [], label)
+
+    downloadCSV(`attendance-${kind}-${reportMonth}.csv`, csv)
+    toast.success(`${label} ${kind} downloaded.`)
+    setReportOpen(false)
+  }
+
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase()
-    if (!term) return people
-    return people.filter((p) => [p.full_name, p.email, p.department]
-      .filter(Boolean).some((f) => f.toLowerCase().includes(term)))
-  }, [people, search])
+    const list = term
+      ? people.filter((p) => [p.full_name, p.email, p.department]
+          .filter(Boolean).some((f) => f.toLowerCase().includes(term)))
+      : [...people]
+    if (sortByLate) {
+      list.sort((a, b) => (lateCounts[b.id] || 0) - (lateCounts[a.id] || 0) ||
+                          a.full_name.localeCompare(b.full_name))
+    }
+    return list
+  }, [people, search, sortByLate, lateCounts])
 
   const marked = people.filter((p) => records[p.id]).length
   const pct = people.length ? Math.round((marked / people.length) * 100) : 0
+  const totalLates = Object.values(lateCounts).reduce((sum, n) => sum + n, 0)
+  const monthLabel = new Date(`${date}T00:00:00`)
+    .toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
 
   return (
     <section className="card">
       <div className="card-head">
         <div>
           <h2>Roster · {formatDate(date)}</h2>
-          <p className="sub">{marked} of {people.length} marked</p>
+          <p className="sub">
+            {marked} of {people.length} marked ·{' '}
+            <strong style={{ color: totalLates ? 'var(--warn)' : 'inherit' }}>
+              {totalLates} late arrival{totalLates === 1 ? '' : 's'}
+            </strong>{' '}in {monthLabel}
+          </p>
         </div>
         <div className="toolbar" style={{ width: 'auto' }}>
           <label className="search" style={{ minWidth: 180 }}>
@@ -331,12 +421,48 @@ function TeamRoster() {
           <button type="button" className="btn btn-2" onClick={markRemaining} disabled={loading || marked === people.length}>
             <Icon name="check" size={15} /> Mark rest present
           </button>
+          <button type="button" className="btn btn-2" onClick={() => setReportOpen(true)}>
+            <Icon name="trend" size={15} /> Month report
+          </button>
         </div>
       </div>
 
       <div style={{ padding: '0 18px' }}>
         <div className="meter" style={{ marginTop: 14 }}><span style={{ width: `${pct}%` }} /></div>
       </div>
+
+      {reportOpen && (
+        <Modal title="Download attendance report"
+          subtitle="Everyone's attendance for one month, as a CSV you can open in Excel"
+          onClose={() => setReportOpen(false)}>
+          <div className="field">
+            <label htmlFor="report_month">Month</label>
+            <input id="report_month" type="month" value={reportMonth} max={currentMonth()}
+              onChange={(e) => setReportMonth(e.target.value)} />
+          </div>
+
+          <div className="report-choice">
+            <div>
+              <strong>Summary</strong>
+              <p className="dim">One row per person: present, WFH, half days, leave, absent,
+                late arrivals, days marked and hours logged. This is the one payroll wants.</p>
+              <button type="button" className="btn" disabled={reportBusy}
+                onClick={() => downloadReport('summary')}>
+                {reportBusy && <span className="spinner" />} Download summary
+              </button>
+            </div>
+            <div>
+              <strong>Daily detail</strong>
+              <p className="dim">One row per person per day, with check-in, check-out, hours
+                and the late flag. Use it to audit a specific week.</p>
+              <button type="button" className="btn btn-2" disabled={reportBusy}
+                onClick={() => downloadReport('detail')}>
+                {reportBusy && <span className="spinner" />} Download detail
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <div className="card-body flush" style={{ marginTop: 6 }}>
         {loading ? <SkeletonRows rows={6} />
@@ -347,7 +473,18 @@ function TeamRoster() {
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Employee</th><th>Department</th><th>In / out</th><th>Mark</th></tr>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Department</th>
+                    <th>In / out</th>
+                    <th className="right">
+                      <button type="button" className="th-sort" onClick={() => setSortByLate((v) => !v)}
+                        title="Late arrivals this month — click to sort">
+                        Late (MTD) {sortByLate ? '▾' : ''}
+                      </button>
+                    </th>
+                    <th>Mark</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {visible.map((person) => {
@@ -365,6 +502,13 @@ function TeamRoster() {
                         </td>
                         <td className="dim">{person.department || '—'}</td>
                         <td className="nowrap dim tnum">{formatTime(record?.check_in)} — {formatTime(record?.check_out)}</td>
+                        <td className="right">
+                          {lateCounts[person.id]
+                            ? <span className={`late-count ${lateCounts[person.id] >= 3 ? 'high' : ''}`}>
+                                {lateCounts[person.id]}
+                              </span>
+                            : <span className="dim tnum">0</span>}
+                        </td>
                         <td>
                           <div className="pills">
                             {PILL_STATUSES.map((status) => (

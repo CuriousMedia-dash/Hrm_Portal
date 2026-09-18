@@ -74,7 +74,7 @@ export default function Employees() {
           <p className="sub">
             {loading ? 'Loading the directory…'
               : `${filtered.length} of ${rows.length} ${rows.length === 1 ? 'person' : 'people'}`}
-            {!isAdmin && ' · directory is read-only for you'}
+            {!isAdmin && ' · your department, read-only'}
           </p>
         </div>
         <div className="page-actions">
@@ -205,6 +205,7 @@ export default function Employees() {
               <div className="row" style={{ gap: 7 }}>
                 <Badge value={viewing.status} label={labelOf(EMPLOYEE_STATUSES, viewing.status)} />
                 {viewing.role === 'hr_admin' && <span className="chip chip-brand"><Icon name="shield" size={12} /> HR admin</span>}
+                {viewing.role === 'manager' && <span className="chip chip-brand"><Icon name="users" size={12} /> Manager</span>}
               </div>
               <div className="dim" style={{ fontSize: '.84rem', marginTop: 5 }}>
                 {viewing.email
@@ -421,9 +422,13 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
               <label htmlFor="role">Portal role</label>
               <select id="role" value={form.role} onChange={set('role')}>
                 <option value="employee">Employee</option>
+                <option value="manager">Manager</option>
                 <option value="hr_admin">HR admin</option>
               </select>
-              <span className="hint">HR admins can manage everyone’s records.</span>
+              <span className="hint">
+                Managers approve leave and regularizations for their own department.
+                HR admins manage everyone.
+              </span>
             </div>
           </div>
 

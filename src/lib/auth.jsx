@@ -61,6 +61,9 @@ export function AuthProvider({ children }) {
     employee,
     loading,
     isAdmin: employee?.role === 'hr_admin',
+    isManager: employee?.role === 'manager',
+    // anyone who can approve something: HR, or a manager for their department
+    isApprover: employee?.role === 'hr_admin' || employee?.role === 'manager',
     configured: supabaseConfigured,
     refreshEmployee: () => loadEmployee(session?.user?.id),
     signIn: (email, password) =>

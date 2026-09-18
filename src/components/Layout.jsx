@@ -28,7 +28,7 @@ const TITLES = {
 }
 
 export default function Layout() {
-  const { employee, user, isAdmin, signOut } = useAuth()
+  const { employee, user, isAdmin, isManager, isApprover, signOut } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [open, setOpen] = useState(false)
@@ -41,7 +41,7 @@ export default function Layout() {
 
   // Badge the Leave nav item with whatever is waiting on HR.
   useEffect(() => {
-    if (!isAdmin) { setPendingCount(0); return }
+    if (!isApprover) { setPendingCount(0); return }
     let active = true
     supabase
       .from('leave_requests')
@@ -49,7 +49,7 @@ export default function Layout() {
       .eq('status', 'pending')
       .then(({ count }) => { if (active) setPendingCount(count || 0) })
     return () => { active = false }
-  }, [isAdmin, location.pathname])
+  }, [isApprover, location.pathname])
 
   function pickTheme(choice) {
     setTheme(choice)
@@ -61,7 +61,7 @@ export default function Layout() {
     navigate('/login', { replace: true })
   }
 
-  const visibleNav = NAV.filter((item) => !item.adminOnly || isAdmin)
+  const visibleNav = NAV.filter((item) => !item.adminOnly || isApprover)
   const sections = [...new Set(visibleNav.map((n) => n.section))]
 
   return (
@@ -115,7 +115,7 @@ export default function Layout() {
             <Avatar name={name} size="sm" />
             <div className="who">
               <strong>{name}</strong>
-              <span>{isAdmin ? 'HR admin' : 'Employee'}</span>
+              <span>{isAdmin ? 'HR admin' : isManager ? 'Manager' : 'Employee'}</span>
             </div>
           </div>
 

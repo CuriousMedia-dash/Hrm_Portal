@@ -14,7 +14,7 @@ import EmptyState from '../components/EmptyState.jsx'
 import { SkeletonRows } from '../components/Skeleton.jsx'
 
 export default function Leave() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, isApprover } = useAuth()
   const [tab, setTab] = useState('me')
   const [applyOpen, setApplyOpen] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
@@ -25,11 +25,15 @@ export default function Leave() {
         <div>
           <h1>Leave</h1>
           <p className="sub">
-            {isAdmin ? 'Your own time off, and everything waiting on your approval.' : 'Apply for time off and track your balance.'}
+            {isApprover
+              ? (isAdmin
+                  ? 'Your own time off, and every request across the company.'
+                  : 'Your own time off, and requests from your department.')
+              : 'Apply for time off and track your balance.'}
           </p>
         </div>
         <div className="page-actions">
-          {isAdmin && (
+          {isApprover && (
             <div className="seg">
               <button type="button" className={tab === 'me' ? 'on' : ''} onClick={() => setTab('me')}>
                 <Icon name="user" size={14} /> Mine
@@ -45,7 +49,7 @@ export default function Leave() {
         </div>
       </div>
 
-      {isAdmin && tab === 'team'
+      {isApprover && tab === 'team'
         ? <Approvals key={`t${reloadKey}`} />
         : <MyLeave key={`m${reloadKey}`} />}
 
@@ -73,7 +77,8 @@ function MyLeave() {
     if (!employee?.id) { setLoading(false); return }
     setLoading(true)
     const [reqs, bals] = await Promise.all([
-      supabase.from('leave_requests').select('*')
+      supabase.from('leave_requests')
+        .select('*, reviewer:employees!leave_requests_reviewed_by_fkey(full_name, role)')
         .eq('employee_id', employee.id).order('start_date', { ascending: false }),
       supabase.from('leave_balance_summary').select('*')
         .eq('employee_id', employee.id).eq('year', year)
@@ -170,6 +175,13 @@ function MyLeave() {
                         <td className="dim">{req.reason || '—'}</td>
                         <td>
                           <Badge value={req.status} />
+                          {req.reviewer?.full_name && (
+                            <div className="dim" style={{ fontSize: '.75rem', marginTop: 3 }}>
+                              by {req.reviewer.full_name}
+                              {req.reviewer.role === 'manager' ? ' (manager)' : ' (HR)'}
+                              {req.reviewed_at ? ` · ${formatDate(req.reviewed_at)}` : ''}
+                            </div>
+                          )}
                           {req.review_note && <div className="dim" style={{ fontSize: '.76rem', marginTop: 3 }}>{req.review_note}</div>}
                         </td>
                         <td>
@@ -207,7 +219,7 @@ function MyLeave() {
 
 /* ------------------------------------------------------------------ */
 function Approvals() {
-  const { employee: me } = useAuth()
+  const { employee: me, isAdmin: isAdminView } = useAuth()
   const toast = useToast()
   const [requests, setRequests] = useState([])
   const [status, setStatus] = useState('pending')
@@ -219,7 +231,7 @@ function Approvals() {
   const load = useCallback(async () => {
     setLoading(true)
     let query = supabase.from('leave_requests')
-      .select('*, employee:employees!leave_requests_employee_id_fkey(full_name, department, email)')
+      .select('*, employee:employees!leave_requests_employee_id_fkey(full_name, department, email), reviewer:employees!leave_requests_reviewed_by_fkey(full_name, role)')
       .order('start_date', { ascending: false })
     if (status !== 'all') query = query.eq('status', status)
     const { data, error } = await query
@@ -257,7 +269,7 @@ function Approvals() {
       <section className="card">
         <div className="card-head">
           <div>
-            <h2>Team requests</h2>
+            <h2>{isAdminView ? 'All requests' : 'My department'}</h2>
             <p className="sub">{totals.count} request{totals.count === 1 ? '' : 's'} · {totals.days} days</p>
           </div>
           <div className="seg">
@@ -297,7 +309,14 @@ function Approvals() {
                         <td className="nowrap">{formatRange(req.start_date, req.end_date)}</td>
                         <td className="right tnum">{req.days}</td>
                         <td className="dim">{req.reason || '—'}</td>
-                        <td><Badge value={req.status} /></td>
+                        <td>
+                          <Badge value={req.status} />
+                          {req.reviewer?.full_name && (
+                            <div className="dim" style={{ fontSize: '.75rem', marginTop: 3 }}>
+                              by {req.reviewer.full_name}{req.reviewer.role === 'manager' ? ' (manager)' : ' (HR)'}
+                            </div>
+                          )}
+                        </td>
                         <td>
                           <div className="row-actions">
                             {req.status === 'pending' && (
@@ -354,14 +373,13 @@ function ApplyForm({ onClose, onSaved }) {
   const [leaveType, setLeaveType] = useState('casual')
   const [startDate, setStartDate] = useState(todayISO())
   const [endDate, setEndDate] = useState(todayISO())
-  const [halfDay, setHalfDay] = useState(false)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   const days = useMemo(
-    () => (halfDay ? 0.5 : workingDaysBetween(startDate, endDate)),
-    [startDate, endDate, halfDay]
+    () => workingDaysBetween(startDate, endDate),
+    [startDate, endDate]
   )
 
   async function handleSubmit(event) {
@@ -405,22 +423,14 @@ function ApplyForm({ onClose, onSaved }) {
             <input id="start_date" type="date" value={startDate} required
               onChange={(e) => {
                 setStartDate(e.target.value)
-                if (halfDay || new Date(e.target.value) > new Date(endDate)) setEndDate(e.target.value)
+                if (new Date(e.target.value) > new Date(endDate)) setEndDate(e.target.value)
               }} />
           </div>
           <div className="field">
             <label htmlFor="end_date">To</label>
-            <input id="end_date" type="date" value={endDate} min={startDate} disabled={halfDay} required
+            <input id="end_date" type="date" value={endDate} min={startDate} required
               onChange={(e) => setEndDate(e.target.value)} />
           </div>
-        </div>
-
-        <div className="field">
-          <label className="check-row">
-            <input type="checkbox" checked={halfDay}
-              onChange={(e) => { setHalfDay(e.target.checked); if (e.target.checked) setEndDate(startDate) }} />
-            Half day only
-          </label>
         </div>
 
         <div className="field">

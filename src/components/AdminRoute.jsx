@@ -1,9 +1,11 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../lib/auth.jsx'
 
-/** Routes only HR admins may open. Everyone else is sent to the dashboard. */
+/** Routes only approvers (HR or a manager) may open. Everyone else goes home. */
 export default function AdminRoute() {
-  const { isAdmin, loading } = useAuth()
+  const { isApprover, loading } = useAuth()
   if (loading) return null
-  return isAdmin ? <Outlet /> : <Navigate to="/" replace />
+  // HR and managers both reach the directory; row level security decides
+  // that a manager only sees their own department.
+  return isApprover ? <Outlet /> : <Navigate to="/" replace />
 }

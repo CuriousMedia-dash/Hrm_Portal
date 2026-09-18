@@ -57,16 +57,16 @@ Opens on <http://localhost:5173>.
 
 ## How access works
 
-| | Employee | HR admin |
-|---|---|---|
-| Directory | not visible (own record only) | read + add / edit / delete |
-| Own profile | edit contact details only | edit anything |
-| Attendance | check in/out for today, see own history | mark anyone, any past date, see everyone |
-| Leave | apply, withdraw while pending, see own | approve / reject everyone's |
-| Leave balances | see own | set anyone's |
-| Reimbursements | raise / withdraw own claims | approve, reject, mark paid |
-| Documents | upload / replace / delete own | view everyone's |
-| Emergency contacts | manage own | view everyone's |
+| | Employee | Manager | HR admin |
+|---|---|---|---|
+| Directory | own record only | own department, read-only | everyone, read + write |
+| Own profile | contact details only | contact details only | anything |
+| Attendance | check in/out, see own history | see + mark own department | mark anyone, any date, export |
+| Leave | apply, withdraw while pending | approve / reject own department | approve / reject everyone |
+| Leave balances | see own | — | set anyone's |
+| Reimbursements | raise / withdraw own claims | — | approve, reject, mark paid |
+| Documents | upload / replace / delete own | — | view everyone's |
+| Emergency contacts | manage own | — | view everyone's |
 
 The database enforces this, not the UI. An employee who fiddles with the browser
 still cannot read the directory or someone else's attendance — the policies in `schema.sql` block
@@ -138,6 +138,47 @@ Employees see the state of their own requests, plus a nudge for any missing
 required document or emergency contact. They never see anyone else's data —
 the row-level security would not return it even if the panel asked.
 
+## Roles and approvals
+
+Three roles, set on the employee record: `employee`, `manager`, `hr_admin`.
+
+A **manager** approves for their own **department** — the match is on the
+`department` column, so a manager of Social Media sees Social Media's leave and
+regularization requests and nobody else's. This is enforced by
+`manages_employee()` in the policies, not by the interface. HR sees everything.
+
+Every decision records who made it. Approved and rejected requests show
+"by <name> (manager)" or "by <name> (HR)" to the employee and in the approval
+queue, so there is never a question of who waved something through.
+
+To appoint one: Employees → edit the person → **Portal role → Manager**. Make
+sure their `department` matches the team they run.
+
+## Regularization
+
+An employee who was marked late, or whose day never got marked, can raise a
+regularization request from **Attendance → My month → Regularize**, giving a
+reason. Their manager or HR approves it under **Attendance → Requests**.
+
+Approving a late request sets `late_waived` on that attendance row, which
+drops the day out of their late count — the trigger that marks arrivals late
+respects the waiver, so it does not come back on the next write. Reversing an
+approval puts the late back.
+
+Approving a missed-day request records the day as present, with the reason
+stored in the note.
+
+## Monthly attendance report
+
+**Attendance → Team roster → Month report** downloads either of two CSVs:
+
+- **Summary** — one row per person: present, WFH, half days, leave, absent,
+  late arrivals, days marked, hours logged. This is the payroll one.
+- **Daily detail** — one row per person per day, with times, hours and the
+  late flag, for auditing a particular week.
+
+Both open directly in Excel.
+
 ## Work rules
 
 Two numbers are enforced in the database, not just the interface, so they hold
@@ -154,6 +195,7 @@ Both live in `src/lib/policy.js` (for the interface) and
 or they will disagree — the database wins, and the interface will look broken.
 
 Leave types are casual, sick, earned and **maternity** (which replaced unpaid).
+Half-day leave was removed — leave is counted in whole working days.
 New joiners are seeded 12 casual / 6 sick / 15 earned / 0 maternity; HR grants
 maternity days per person when they apply.
 

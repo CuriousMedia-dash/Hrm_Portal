@@ -21,7 +21,7 @@ const REFRESH_MS = 5 * 60 * 1000
  * their profile — never anyone else's data, which is what the RLS allows.
  */
 export default function NotificationBell() {
-  const { employee, isAdmin } = useAuth()
+  const { employee, isAdmin, isApprover } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState([])
@@ -34,8 +34,8 @@ export default function NotificationBell() {
     const next = []
 
     try {
-      if (isAdmin) {
-        const [leave, claims, birthdays, staff] = await Promise.all([
+      if (isApprover) {
+        const [leave, claims, birthdays, staff, regs] = await Promise.all([
           supabase.from('leave_requests')
             .select('id, leave_type, start_date, end_date, days, employee:employees!leave_requests_employee_id_fkey(full_name)')
             .eq('status', 'pending').order('created_at').limit(20),
@@ -45,7 +45,10 @@ export default function NotificationBell() {
           supabase.rpc('upcoming_birthdays', { days_ahead: 7 }),
           supabase.from('employees')
             .select('id, full_name, department, designation, employment_type, status, date_of_joining, internship_end_date, notice_end_date')
-            .in('status', ['active', 'on_notice'])
+            .in('status', ['active', 'on_notice']),
+          supabase.from('regularizations')
+            .select('id, work_date, kind, reason, employee:employees!regularizations_employee_id_fkey(full_name, department)')
+            .eq('status', 'pending').order('created_at').limit(20)
         ])
 
         for (const row of leave.data || []) {
@@ -63,6 +66,15 @@ export default function NotificationBell() {
             title: `${row.employee?.full_name || 'Someone'} claimed ${formatMoney(row.amount)}`,
             detail: `${labelOf(EXPENSE_CATEGORIES, row.category)} · ${formatDate(row.claim_date)}`,
             to: '/reimbursements'
+          })
+        }
+
+        for (const row of regs.data || []) {
+          next.push({
+            id: `reg-${row.id}`, kind: 'doc', person: row.employee?.full_name,
+            title: `${row.employee?.full_name || 'Someone'} asked to regularize ${row.kind === 'late' ? 'a late arrival' : 'a missed day'}`,
+            detail: `${formatDate(row.work_date)} · ${row.reason.slice(0, 60)}${row.reason.length > 60 ? '…' : ''}`,
+            to: '/attendance'
           })
         }
 
@@ -106,7 +118,7 @@ export default function NotificationBell() {
           })
         }
       } else {
-        const [mine, myClaims, docs, contacts] = await Promise.all([
+        const [mine, myClaims, docs, contacts, myRegs] = await Promise.all([
           supabase.from('leave_requests').select('id, leave_type, start_date, end_date, status, review_note')
             .eq('employee_id', employee.id).in('status', ['pending', 'approved', 'rejected'])
             .order('updated_at', { ascending: false }).limit(5),
@@ -114,7 +126,9 @@ export default function NotificationBell() {
             .eq('employee_id', employee.id).in('status', ['pending', 'approved', 'rejected', 'paid'])
             .order('updated_at', { ascending: false }).limit(5),
           supabase.from('employee_documents').select('doc_type').eq('employee_id', employee.id),
-          supabase.from('emergency_contacts').select('id').eq('employee_id', employee.id)
+          supabase.from('emergency_contacts').select('id').eq('employee_id', employee.id),
+          supabase.from('regularizations').select('id, work_date, kind, status, review_note')
+            .eq('employee_id', employee.id).order('updated_at', { ascending: false }).limit(5)
         ])
 
         for (const row of mine.data || []) {
@@ -147,6 +161,18 @@ export default function NotificationBell() {
           })
         }
 
+        for (const row of myRegs.data || []) {
+          next.push({
+            id: `mr-${row.id}`,
+            kind: row.status === 'pending' ? 'doc' : row.status === 'approved' ? 'ok' : 'bad',
+            title: row.status === 'pending'
+              ? 'Your regularization request is awaiting approval'
+              : `Your regularization was ${row.status}`,
+            detail: row.review_note || formatDate(row.work_date),
+            to: '/attendance'
+          })
+        }
+
         const have = new Set((docs.data || []).map((d) => d.doc_type))
         const missing = REQUIRED_DOCS.filter((d) => !have.has(d.value))
         if (missing.length > 0) {
@@ -175,7 +201,7 @@ export default function NotificationBell() {
     setItems(next)
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employee?.id, isAdmin])
+  }, [employee?.id, isApprover])
 
   useEffect(() => {
     load()
