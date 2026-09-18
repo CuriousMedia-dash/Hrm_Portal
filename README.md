@@ -1,0 +1,233 @@
+# HRM Portal — Curious Media
+
+Internal HR portal: employee directory, attendance and leave, with HR-admin and
+employee roles. React + Vite on the front, Supabase (Postgres + Auth + row level
+security) as the backend.
+
+---
+
+## 1. Create the Supabase project
+
+1. Go to <https://supabase.com/dashboard> → **New project**. Pick a region close
+   to you (Mumbai / Singapore) and save the database password somewhere safe.
+2. Open **SQL Editor → New query**, paste the whole of `supabase/schema.sql`, and run it.
+   This creates the tables, the row-level-security policies and the signup trigger.
+   It is safe to re-run.
+3. *(Optional)* Run `supabase/seed_sample_data.sql` to get five sample employees
+   so the directory is not empty while you build.
+4. **Auth settings** (Authentication → Providers → Email): for internal use, turn
+   **"Confirm email"** off so people can sign in immediately. Leave it on if you
+   want inbox verification — then everyone has to click the emailed link first.
+
+## 2. Point the app at your project
+
+```bash
+copy .env.example .env      # Windows
+# cp .env.example .env      # macOS / Linux
+```
+
+Fill in both values from **Supabase → Project Settings → API**:
+
+```
+VITE_SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOi...
+```
+
+The anon key is meant to be public — every rule that protects data lives in the
+RLS policies in `schema.sql`. Never put the **service_role** key in this file.
+
+## 3. Run it
+
+```bash
+npm install
+npm run dev
+```
+
+Opens on <http://localhost:5173>.
+
+## 4. Make yourself the HR admin
+
+1. In the app, click **Sign up** and register with your work email.
+2. In Supabase → SQL Editor, run `supabase/make_admin.sql` (edit the email in it
+   first if it is not `growth@curiousmedia.in`).
+3. Refresh the portal. You now see the Employees "Add employee" button, the team
+   roster and the leave approvals tab.
+
+---
+
+## How access works
+
+| | Employee | HR admin |
+|---|---|---|
+| Directory | not visible (own record only) | read + add / edit / delete |
+| Own profile | edit contact details only | edit anything |
+| Attendance | check in/out for today, see own history | mark anyone, any past date, see everyone |
+| Leave | apply, withdraw while pending, see own | approve / reject everyone's |
+| Leave balances | see own | set anyone's |
+| Reimbursements | raise / withdraw own claims | approve, reject, mark paid |
+| Documents | upload / replace / delete own | view everyone's |
+| Emergency contacts | manage own | view everyone's |
+
+The database enforces this, not the UI. An employee who fiddles with the browser
+still cannot read the directory or someone else's attendance — the policies in `schema.sql` block
+it at the Postgres level. A `before update` trigger also stops employees from
+promoting themselves to `hr_admin` or editing their own department or joining date.
+
+**How people get access:** HR adds the employee (with their work email) in the
+Employees tab, the person signs up with that same email, and the signup trigger
+links the two automatically. If someone signs up before HR adds them, they get a
+`pending` record that HR can fill in later.
+
+## Documents & emergency contacts
+
+Each employee uploads their own paperwork from **My profile**. Files go to a
+**private** Supabase Storage bucket (`employee-documents`); the `employee_documents`
+table records which file is which. Nobody can reach a file by URL — the app mints
+a signed link valid for two minutes when you click View.
+
+Required: 10th, 12th, UG and PG mark sheets, passport photo, PAN, Aadhaar,
+guardian's Aadhaar, bank proof (passbook front page or cancelled cheque).
+Optional: relieving letter and previous offer letter.
+
+Two emergency contacts are required, stored as data (name, relationship, phone)
+rather than as a document.
+
+To change the list, edit `src/lib/documents.js` — add or remove an entry in
+`DOC_TYPES`, flip `required` — and add the same `doc_type` value to the check
+constraint in `supabase/schema.sql`.
+
+HR sees everything: open **Employees → a person** and their documents and
+contacts are at the bottom of the panel, view-only.
+
+## Loading the directory in bulk
+
+The portal reads the `employees` table live, so anything inserted in Supabase
+shows up on the next page load — there is no import step in the app and nothing
+to sync.
+
+Two ways to load a lot of people at once:
+
+**SQL** — `supabase/import_employees.sql` holds the directory: name, department,
+designation, employment type, date of birth, status. Run
+`supabase/allow_null_email.sql` once first, because those records carry no email
+address and the column is NOT NULL until you do.
+
+An employee record without an email is directory-only: it shows in the list,
+counts in headcount, and feeds birthday alerts, but no signup can link to it.
+Add the email (Employees → Edit) when that person needs portal access.
+
+**CSV** — Supabase → Table Editor → `employees` → **Insert → Import data from CSV**,
+using `supabase/import_employees_template.csv`, which holds the same 27 rows.
+Leave `id`, `user_id` and `role` out; the database fills them.
+
+`date_of_birth` is what the birthday notifications read; only the day and month
+matter, so a placeholder year is fine. Each person with an email still signs up
+themselves (or you create their login under Authentication → Users); the signup
+links to their row by email.
+
+## Notifications
+
+The bell in the top bar collects whatever needs attention, refreshing every five
+minutes and whenever it is opened.
+
+HR sees pending leave requests, pending reimbursement claims, and birthdays in
+the next 7 days (from the `upcoming_birthdays()` function, which ignores the
+year and handles the December → January wrap).
+
+Employees see the state of their own requests, plus a nudge for any missing
+required document or emergency contact. They never see anyone else's data —
+the row-level security would not return it even if the panel asked.
+
+## Work rules
+
+Two numbers are enforced in the database, not just the interface, so they hold
+even if someone pokes at the API directly:
+
+- **Late after 10:20 IST.** A check-in past that is flagged `is_late` by a
+  trigger. The chip beside the bell counts your late arrivals this month.
+- **Eight hours before check-out.** A trigger rejects an early check-out; the
+  button is replaced by a countdown until the eight hours are up. HR is exempt,
+  so a genuine short day can still be corrected from the roster.
+
+Both live in `src/lib/policy.js` (for the interface) and
+`supabase/add_work_rules.sql` (for the database). **Change them in both places**
+or they will disagree — the database wins, and the interface will look broken.
+
+Leave types are casual, sick, earned and **maternity** (which replaced unpaid).
+New joiners are seeded 12 casual / 6 sick / 15 earned / 0 maternity; HR grants
+maternity days per person when they apply.
+
+## Alerts
+
+The bell refreshes every five minutes and whenever it is opened.
+
+HR sees: pending leave, pending reimbursements, birthdays within 7 days,
+interns converting within 30 days, and notice periods ending within 15 days.
+Employees see their own request outcomes and anything missing from their profile.
+
+Two dates drive the last two:
+
+- **Internship converts on** — set per intern, or left empty to mean six months
+  from the joining date.
+- **Last working day** — set when someone's status becomes On notice.
+
+Both appear in the employee form only when they apply, and in the detail panel
+beside the joining date.
+
+## Project layout
+
+```
+HRM_Portal/
+├─ supabase/
+│  ├─ schema.sql             tables, RLS policies, triggers, views  ← run this first
+│  ├─ make_admin.sql         promote the first HR admin
+│  └─ seed_sample_data.sql   optional demo employees
+├─ src/
+│  ├─ lib/
+│  │  ├─ supabaseClient.js   the Supabase client
+│  │  ├─ auth.jsx            session + employee record context
+│  │  └─ format.js           dates, labels, working-day maths
+│  ├─ components/            Layout, Modal, Badge, Spinner, ProtectedRoute
+│  ├─ pages/                 Login, Dashboard, Employees, Attendance, Leave, Profile
+│  ├─ App.jsx                routes
+│  └─ index.css              all styling (light + dark, responsive)
+├─ .env.example
+└─ package.json
+```
+
+## Leave rules baked in
+
+- Types: casual, sick, earned, unpaid.
+- New employees are auto-granted 12 casual / 6 sick / 15 earned days for the
+  current year (change the numbers in `seed_default_balances()` in `schema.sql`).
+- Day count excludes Saturdays and Sundays; half-day requests count as 0.5.
+- Balances shown are `entitled − approved days this year`, from the
+  `leave_balance_summary` view.
+
+## Deploying to Vercel
+
+1. Push the repo to GitHub. Make it **private** — `.env` is gitignored so no keys
+   leak, but the schema and HR logic are nobody else's business.
+2. Vercel → **Add New → Project** → import the repo. It detects Vite; leave the
+   build command (`npm run build`) and output directory (`dist`) as found.
+3. Add two environment variables, for all three environments:
+   `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, the same values as `.env`.
+   **Never add the service_role key** — anything in a `VITE_` variable ships to
+   the browser.
+4. Deploy, then take the resulting URL to **Supabase → Authentication → URL
+   Configuration** and set **Site URL** to it, adding it to **Redirect URLs** too.
+   Password resets and email confirmations point at that URL.
+
+`vercel.json` handles the part people usually trip on: a single-page app needs
+every path rewritten to `index.html`, or refreshing on `/employees` returns a 404.
+
+Pushing to the default branch redeploys. Pull requests get their own preview URL —
+those hit the same live Supabase project, so treat preview data as real.
+
+## Ideas for the next pass
+
+- Payroll / payslips (the `employees` table is ready for salary fields)
+- Document uploads via Supabase Storage (offer letters, ID proofs)
+- Recruitment pipeline
+- Email notifications on leave approval (Supabase Edge Function + Resend)
+- Monthly attendance export to CSV/Excel
