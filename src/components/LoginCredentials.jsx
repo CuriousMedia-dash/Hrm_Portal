@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient.js'
 import { useToast } from './Toast.jsx'
 import Modal from './Modal.jsx'
 import Icon from './Icon.jsx'
+import { edgeErrorMessage } from '../lib/edgeError.js'
 
 /** Readable but not guessable: no ambiguous characters, always mixed. */
 export function generatePassword() {
@@ -71,11 +72,7 @@ export default function LoginCredentials({
     setBusy(false)
 
     if (fnError) {
-      setError(
-        /not found|404|failed to fetch/i.test(fnError.message)
-          ? 'The create-employee-login function is not deployed yet. See supabase/functions/create-employee-login/README.md.'
-          : fnError.message
-      )
+      setError(await edgeErrorMessage(fnError))
       return
     }
     if (data?.error) { setError(data.error); return }

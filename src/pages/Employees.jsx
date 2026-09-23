@@ -21,6 +21,7 @@ import DocumentWallet from '../components/DocumentWallet.jsx'
 import LoginCredentials, { generatePassword } from '../components/LoginCredentials.jsx'
 import EmergencyContacts from '../components/EmergencyContacts.jsx'
 import DateField from '../components/DateField.jsx'
+import { edgeErrorMessage } from '../lib/edgeError.js'
 
 const BLANK = {
   full_name: '', email: '', employee_code: '', phone: '', department: '',
@@ -391,13 +392,9 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
         )
 
         if (fnError || fn?.error) {
-          // the employee is saved; only the login failed, so say exactly that
-          toast.error(
-            fn?.error ||
-            (/not found|404|failed to fetch/i.test(fnError?.message || '')
-              ? 'Employee saved, but the create-employee-login function is not deployed.'
-              : `Employee saved, but the login failed: ${fnError.message}`)
-          )
+          // the employee is saved; only the login failed, so say exactly why
+          const why = fn?.error || await edgeErrorMessage(fnError)
+          toast.error(`Employee saved, but the login failed: ${why}`)
           onSaved(`${payload.full_name} added to the directory.`, null)
           return
         }

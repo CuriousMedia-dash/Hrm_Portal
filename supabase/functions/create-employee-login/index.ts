@@ -26,6 +26,18 @@ function json(body: unknown, status = 200) {
   })
 }
 
+/** Auth has no get-by-email, so page through until the address turns up. */
+async function findAuthUserByEmail(admin: any, email: string) {
+  for (let page = 1; page <= 25; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 })
+    if (error || !data?.users?.length) return null
+    const hit = data.users.find((u: any) => (u.email ?? '').toLowerCase() === email)
+    if (hit) return hit
+    if (data.users.length < 200) return null
+  }
+  return null
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ error: 'Use POST.' }, 405)
@@ -68,7 +80,7 @@ Deno.serve(async (req) => {
   if (password.length < 8) return json({ error: 'The password must be at least 8 characters.' }, 400)
 
   const { data: employee, error: employeeError } = await admin
-    .from('employees').select('id, full_name, user_id, email').eq('id', employeeId).maybeSingle()
+    .from('employees').select('id, full_name, user_id, email, status').eq('id', employeeId).maybeSingle()
 
   if (employeeError || !employee) return json({ error: 'That employee record no longer exists.' }, 404)
 
@@ -92,37 +104,66 @@ Deno.serve(async (req) => {
     user_metadata: { full_name: employee.full_name }
   })
 
+  // An address can already exist in Auth without belonging to anyone — a
+  // leftover from a deleted employee, or a half-finished earlier attempt.
+  // Adopt that account rather than dead-ending, which is what used to make
+  // this fail for one person while everybody else went through.
+  let authUserId = created?.user?.id ?? null
+
   if (createError) {
-    const taken = /already|registered|exists/i.test(createError.message)
-    return json({
-      error: taken
-        ? `${email} already has an account. Link it in SQL, or use a different address.`
-        : createError.message
-    }, 400)
+    const taken = /already|registered|exists|duplicate/i.test(createError.message)
+    if (!taken) return json({ error: createError.message }, 400)
+
+    const existing = await findAuthUserByEmail(admin, email)
+    if (!existing) {
+      return json({
+        error: `${email} is already registered, but the account could not be found to reuse. Try a different address.`
+      }, 400)
+    }
+
+    // is it somebody else's?
+    const { data: owner } = await admin
+      .from('employees').select('id, full_name').eq('user_id', existing.id).maybeSingle()
+
+    if (owner && owner.id !== employee.id) {
+      return json({
+        error: `${email} is already the login for ${owner.full_name}. Use a different address.`
+      }, 409)
+    }
+
+    const { error: adoptError } = await admin.auth.admin.updateUserById(existing.id, {
+      password,
+      email_confirm: true
+    })
+    if (adoptError) return json({ error: adoptError.message }, 400)
+
+    authUserId = existing.id
   }
 
-  // The signup trigger may have made a second record for this new user.
+  if (!authUserId) return json({ error: 'The account could not be created.' }, 500)
+
+  // The signup trigger may have made a second record for this user.
   // Remove it, then attach the login to the record HR actually filled in.
-  await admin.from('employees').delete().eq('user_id', created.user.id).neq('id', employee.id)
+  await admin.from('employees').delete().eq('user_id', authUserId).neq('id', employee.id)
 
   const { error: linkError } = await admin
     .from('employees')
     .update({
-      user_id: created.user.id,
+      user_id: authUserId,
       email,
       status: employee.status === 'pending' ? 'active' : employee.status
     })
     .eq('id', employee.id)
 
   if (linkError) {
-    // don't leave an orphan account behind
-    await admin.auth.admin.deleteUser(created.user.id)
+    // only clean up an account this call actually made
+    if (created?.user?.id) await admin.auth.admin.deleteUser(created.user.id)
     return json({ error: linkError.message }, 400)
   }
 
   return json({
     ok: true,
-    action: 'created',
+    action: created?.user?.id ? 'created' : 'reused',
     email,
     full_name: employee.full_name
   })
