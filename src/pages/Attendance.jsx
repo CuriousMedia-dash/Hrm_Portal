@@ -20,6 +20,7 @@ import { fetchNetworkStatus } from '../lib/network.js'
 import {
   MIN_WORK_HOURS, lateAfterLabel, timeUntilCheckout, hoursWorked
 } from '../lib/policy.js'
+import DateField from '../components/DateField.jsx'
 
 const PILL_STATUSES = ['present', 'wfh', 'half_day', 'leave', 'absent']
 const PILL_LABEL = { present: 'Present', wfh: 'WFH', half_day: 'Half', leave: 'Leave', absent: 'Absent' }
@@ -454,7 +455,7 @@ function TeamRoster() {
             <Icon name="search" size={16} />
             <input placeholder="Find someone…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </label>
-          <input type="date" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} aria-label="Date" />
+          <DateField value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} />
           <button type="button" className="btn btn-2" onClick={markRemaining} disabled={loading || marked === people.length}>
             <Icon name="check" size={15} /> Mark rest present
           </button>

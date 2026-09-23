@@ -18,8 +18,9 @@ import {
 } from '../lib/policy.js'
 import DocumentsPanel from '../components/DocumentsPanel.jsx'
 import DocumentWallet from '../components/DocumentWallet.jsx'
-import LoginCredentials from '../components/LoginCredentials.jsx'
+import LoginCredentials, { generatePassword } from '../components/LoginCredentials.jsx'
 import EmergencyContacts from '../components/EmergencyContacts.jsx'
+import DateField from '../components/DateField.jsx'
 
 const BLANK = {
   full_name: '', email: '', employee_code: '', phone: '', department: '',
@@ -271,6 +272,8 @@ export default function Employees() {
         <LoginCredentials
           employee={credentials.employee}
           mode={credentials.mode}
+          initialPassword={credentials.password}
+          initialDone={credentials.done}
           onClose={() => setCredentials(null)}
           onDone={load}
         />
@@ -281,15 +284,21 @@ export default function Employees() {
           value={editing}
           people={rows}
           onClose={() => setEditing(null)}
-          onSaved={async (message, createdRecord) => {
+          onSaved={async (message, createdRecord, createdPassword) => {
             const wasMe = editing.id && editing.id === me?.id
             setEditing(null)
             toast.success(message)
             await load()
             if (wasMe) refreshEmployee()
-            // a brand new person needs a way in: offer it immediately
             if (createdRecord && isSuperAdmin) {
-              setCredentials({ employee: createdRecord, mode: 'create' })
+              // login already created with the form's password: show it to copy.
+              // otherwise offer to create one now.
+              setCredentials({
+                employee: createdRecord,
+                mode: 'create',
+                password: createdPassword,
+                done: Boolean(createdPassword)
+              })
             }
           }}
         />
@@ -322,6 +331,8 @@ function toFormState(record) {
 function EmployeeForm({ value, people, onClose, onSaved }) {
   const toast = useToast()
   const { isSuperAdmin } = useAuth()
+  const [makeLogin, setMakeLogin] = useState(true)
+  const [loginPassword, setLoginPassword] = useState(generatePassword)
   const [form, setForm] = useState(() => toFormState(value))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -372,6 +383,29 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
           : saveError.message)
         return
       }
+      // create the login in the same step, so HR never has to come back for it
+      if (isNew && isSuperAdmin && makeLogin && payload.email && saved?.id) {
+        const { data: fn, error: fnError } = await supabase.functions.invoke(
+          'create-employee-login',
+          { body: { employee_id: saved.id, email: payload.email, password: loginPassword, action: 'create' } }
+        )
+
+        if (fnError || fn?.error) {
+          // the employee is saved; only the login failed, so say exactly that
+          toast.error(
+            fn?.error ||
+            (/not found|404|failed to fetch/i.test(fnError?.message || '')
+              ? 'Employee saved, but the create-employee-login function is not deployed.'
+              : `Employee saved, but the login failed: ${fnError.message}`)
+          )
+          onSaved(`${payload.full_name} added to the directory.`, null)
+          return
+        }
+
+        onSaved(`${payload.full_name} added.`, saved, loginPassword)
+        return
+      }
+
       onSaved(
         isNew ? `${payload.full_name} added to the directory.` : 'Changes saved.',
         isNew ? saved : null
@@ -473,11 +507,11 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
           <div className="field-row">
             <div className="field">
               <label htmlFor="date_of_joining">Date of joining</label>
-              <input id="date_of_joining" type="date" value={form.date_of_joining || ''} onChange={set('date_of_joining')} />
+              <DateField id="date_of_joining" value={form.date_of_joining} onChange={set('date_of_joining')} />
             </div>
             <div className="field">
               <label htmlFor="date_of_birth">Date of birth</label>
-              <input id="date_of_birth" type="date" value={form.date_of_birth || ''} onChange={set('date_of_birth')} />
+              <DateField id="date_of_birth" value={form.date_of_birth} onChange={set('date_of_birth')} />
             </div>
           </div>
 
@@ -512,7 +546,7 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
           {form.employment_type === 'intern' && (
             <div className="field">
               <label htmlFor="internship_end_date">Internship converts on</label>
-              <input id="internship_end_date" type="date" value={form.internship_end_date || ''}
+              <DateField id="internship_end_date" value={form.internship_end_date}
                 onChange={set('internship_end_date')} />
               <span className="hint">
                 Leave empty to use {INTERNSHIP_MONTHS} months from the joining date
@@ -525,7 +559,7 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
           {form.status === 'on_notice' && (
             <div className="field">
               <label htmlFor="notice_end_date">Last working day</label>
-              <input id="notice_end_date" type="date" value={form.notice_end_date || ''}
+              <DateField id="notice_end_date" value={form.notice_end_date}
                 onChange={set('notice_end_date')} />
               <span className="hint">You are alerted {NOTICE_WARN_DAYS} days before this date.</span>
             </div>
@@ -540,6 +574,35 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
             <label htmlFor="address">Address</label>
             <textarea id="address" value={form.address} onChange={set('address')} />
           </div>
+
+          {isNew && isSuperAdmin && (
+            <div className="login-block">
+              <label className="check-row">
+                <input type="checkbox" checked={makeLogin}
+                  onChange={(e) => setMakeLogin(e.target.checked)} />
+                Create their portal login now
+              </label>
+
+              {makeLogin && (
+                <>
+                  <div className="field" style={{ marginTop: 12, marginBottom: 0 }}>
+                    <label htmlFor="new_password">Password</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input id="new_password" className="mono" value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)} />
+                      <button type="button" className="btn btn-2"
+                        onClick={() => setLoginPassword(generatePassword())}>Generate</button>
+                    </div>
+                    <span className="hint">
+                      {form.email
+                        ? `They sign in with ${form.email} and this password. You can copy both after saving.`
+                        : 'Add a work email above — it is what they sign in with.'}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="form-actions">
             {!isNew && isSuperAdmin && (

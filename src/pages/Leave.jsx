@@ -14,6 +14,7 @@ import Confirm from '../components/Confirm.jsx'
 import Icon from '../components/Icon.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { SkeletonRows } from '../components/Skeleton.jsx'
+import DateField from '../components/DateField.jsx'
 
 export default function Leave() {
   const { isAdmin, isApprover } = useAuth()
@@ -499,7 +500,7 @@ function ApplyForm({ onClose, onSaved }) {
         <div className="field-row">
           <div className="field">
             <label htmlFor="start_date">From</label>
-            <input id="start_date" type="date" value={startDate} required
+            <DateField id="start_date" value={startDate} required
               onChange={(e) => {
                 setStartDate(e.target.value)
                 if (new Date(e.target.value) > new Date(endDate)) setEndDate(e.target.value)
@@ -507,7 +508,7 @@ function ApplyForm({ onClose, onSaved }) {
           </div>
           <div className="field">
             <label htmlFor="end_date">To</label>
-            <input id="end_date" type="date" value={endDate} min={startDate} required
+            <DateField id="end_date" value={endDate} min={startDate} required
               onChange={(e) => setEndDate(e.target.value)} />
           </div>
         </div>

@@ -10,6 +10,7 @@ import Confirm from '../components/Confirm.jsx'
 import StatTile from '../components/StatTile.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { SkeletonRows } from '../components/Skeleton.jsx'
+import DateField from '../components/DateField.jsx'
 
 const KINDS = [
   { value: 'public',   label: 'Public holiday' },
@@ -247,7 +248,7 @@ function HolidayForm({ value, onClose, onSaved }) {
         <div className="field-row">
           <div className="field">
             <label htmlFor="h_start">From</label>
-            <input id="h_start" type="date" value={form.start_date} required
+            <DateField id="h_start" value={form.start_date} required
               onChange={(e) => {
                 setForm((f) => ({
                   ...f,
@@ -258,7 +259,7 @@ function HolidayForm({ value, onClose, onSaved }) {
           </div>
           <div className="field">
             <label htmlFor="h_end">To</label>
-            <input id="h_end" type="date" value={form.end_date} min={form.start_date}
+            <DateField id="h_end" value={form.end_date} min={form.start_date}
               onChange={set('end_date')} required />
             <span className="hint">Same date for a single day.</span>
           </div>

@@ -5,7 +5,7 @@ import Modal from './Modal.jsx'
 import Icon from './Icon.jsx'
 
 /** Readable but not guessable: no ambiguous characters, always mixed. */
-function generatePassword() {
+export function generatePassword() {
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'      // no I or O
   const lower = 'abcdefghijkmnopqrstuvwxyz'     // no l
   const digits = '23456789'                     // no 0 or 1
@@ -31,14 +31,18 @@ function generatePassword() {
  * super admin sets. The work happens in the create-employee-login Edge
  * Function, because it needs the service_role key.
  */
-export default function LoginCredentials({ employee, mode = 'create', onClose, onDone }) {
+export default function LoginCredentials({
+  employee, mode = 'create', onClose, onDone,
+  initialPassword,          // a password already used when creating the account
+  initialDone = false       // open straight on the "here are the credentials" card
+}) {
   const toast = useToast()
   const [email, setEmail] = useState(employee.email || '')
-  const [password, setPassword] = useState(generatePassword)
+  const [password, setPassword] = useState(() => initialPassword || generatePassword())
   const [show, setShow] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [done, setDone] = useState(false)
+  const [done, setDone] = useState(initialDone)
 
   const isReset = mode === 'reset'
 

@@ -13,6 +13,7 @@ import Icon from '../components/Icon.jsx'
 import StatTile from '../components/StatTile.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { SkeletonRows } from '../components/Skeleton.jsx'
+import DateField from '../components/DateField.jsx'
 
 export default function Reimbursements() {
   const { isAdmin } = useAuth()
@@ -385,7 +386,7 @@ function ClaimForm({ onClose, onSaved }) {
         <div className="field-row">
           <div className="field">
             <label htmlFor="claim_date">Date of expense</label>
-            <input id="claim_date" type="date" value={claimDate} max={todayISO()}
+            <DateField id="claim_date" value={claimDate} max={todayISO()}
               onChange={(e) => setClaimDate(e.target.value)} required />
           </div>
           <div className="field">

@@ -83,10 +83,16 @@ links the two automatically. If someone signs up before HR adds them, they get a
 A super admin can create an employee's account with a password they choose —
 no self-signup, no confirmation email.
 
-**Employees → a person → Create login**, or it opens automatically right after
-you add a new employee. Set or generate a password, and the dialog shows the
-credentials once so you can copy and hand them over. For someone who already
-has an account the same button reads **Reset password**.
+**Adding someone new:** the Add employee form has a *Create their portal login
+now* block with a generated password you can edit. Save once and both the record
+and the account exist; the credentials are then shown for you to copy.
+
+**Someone already in the directory:** Employees → click them → **Create login**.
+If they already have an account the same button reads **Reset password**.
+
+If the employee saves but the login step fails, you are told exactly that — the
+record is kept, and you can create the login separately rather than losing the
+form.
 
 This needs the Edge Function deployed once:
 

@@ -12,6 +12,7 @@ import EmptyState from '../components/EmptyState.jsx'
 import DocumentsPanel from '../components/DocumentsPanel.jsx'
 import DocumentWallet from '../components/DocumentWallet.jsx'
 import EmergencyContacts from '../components/EmergencyContacts.jsx'
+import DateField from '../components/DateField.jsx'
 
 export default function Profile() {
   const { employee, user, isAdmin, refreshEmployee } = useAuth()
@@ -142,7 +143,7 @@ export default function Profile() {
                 </div>
                 <div className="field">
                   <label htmlFor="date_of_birth">Date of birth</label>
-                  <input id="date_of_birth" type="date" value={form.date_of_birth || ''} onChange={set('date_of_birth')} />
+                  <DateField id="date_of_birth" value={form.date_of_birth} onChange={set('date_of_birth')} />
                 </div>
               </div>
               <div className="field">
