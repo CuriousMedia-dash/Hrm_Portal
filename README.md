@@ -78,6 +78,31 @@ Employees tab, the person signs up with that same email, and the signup trigger
 links the two automatically. If someone signs up before HR adds them, they get a
 `pending` record that HR can fill in later.
 
+## Document wallet
+
+Two document flows, in opposite directions:
+
+| | Who uploads | Who reads | Where |
+|---|---|---|---|
+| **Submitted documents** | the employee | employee + HR | My profile |
+| **Document wallet** | HR | the employee + HR | My profile (read-only) and Employees → person |
+
+The wallet holds what the company issues: offer letter, appointment letter,
+insurance, payslips, completion certificate, letter of recommendation. HR
+uploads from **Employees → a person → Document wallet → Issue document**; the
+employee sees them under **My profile → My documents from HR** and can download
+but never add or delete.
+
+Payslips recur, so the wallet allows many files per type, each tagged with its
+month. Everything else is normally one file.
+
+**Managers cannot see a wallet** — payslips are salary information, so access is
+the employee themselves plus HR, and nobody else.
+
+Files live at `<employee_id>/issued/` in the same private bucket. The storage
+policies carve out that `issued` subfolder as read-only to everyone but HR, so an
+employee cannot delete their own payslip even by calling the API directly.
+
 ## Documents & emergency contacts
 
 Each employee uploads their own paperwork from **My profile**. Files go to a

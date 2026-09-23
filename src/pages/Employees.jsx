@@ -17,6 +17,7 @@ import {
   ROLES, tierOf, roleSelectValue, applyRoleChoice
 } from '../lib/policy.js'
 import DocumentsPanel from '../components/DocumentsPanel.jsx'
+import DocumentWallet from '../components/DocumentWallet.jsx'
 import EmergencyContacts from '../components/EmergencyContacts.jsx'
 
 const BLANK = {
@@ -246,6 +247,7 @@ export default function Employees() {
           )}
 
           <div className="stack" style={{ marginTop: 22 }}>
+            <DocumentWallet employeeId={viewing.id} canManage={isAdmin} title="Document wallet" />
             <DocumentsPanel employeeId={viewing.id} readOnly title="Submitted documents" />
             <EmergencyContacts employeeId={viewing.id} readOnly />
           </div>

@@ -70,3 +70,38 @@ export function completionOf(documents) {
   const done = REQUIRED_DOCS.filter((d) => have.has(d.value)).length
   return { done, total: REQUIRED_DOCS.length, pct: Math.round((done / REQUIRED_DOCS.length) * 100) }
 }
+
+/* ------------------------------------------------------------------ */
+/* The document wallet — what the company issues TO an employee        */
+/* ------------------------------------------------------------------ */
+
+export const ISSUED_TYPES = [
+  { value: 'offer_letter',           label: 'Offer letter',           icon: 'mail' },
+  { value: 'appointment_letter',     label: 'Appointment letter',     icon: 'checkCircle' },
+  { value: 'insurance',              label: 'Insurance documents',    icon: 'shield' },
+  { value: 'payslip',                label: 'Salary payslip',         icon: 'wallet',  recurring: true },
+  { value: 'completion_certificate', label: 'Completion certificate', icon: 'gift' },
+  { value: 'recommendation_letter',  label: 'Letter of recommendation', icon: 'sparkle' },
+  { value: 'other',                  label: 'Other document',         icon: 'inbox' }
+]
+
+export const issuedLabel = (value) =>
+  ISSUED_TYPES.find((t) => t.value === value)?.label ?? value
+
+export const isRecurring = (value) =>
+  Boolean(ISSUED_TYPES.find((t) => t.value === value)?.recurring)
+
+/** Wallet files live under <employee_id>/issued/ so storage policies can protect them. */
+export function issuedPath(employeeId, docType, fileName) {
+  const ext = (fileName.split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '')
+  return `${employeeId}/issued/${docType}-${Date.now()}.${ext}`
+}
+
+/** "September 2026" from "2026-09". */
+export function periodLabel(period) {
+  if (!period) return null
+  const [year, month] = period.split('-').map(Number)
+  if (!year || !month) return period
+  return new Date(year, month - 1, 1)
+    .toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+}

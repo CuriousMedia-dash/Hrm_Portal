@@ -10,6 +10,7 @@ import Badge from '../components/Badge.jsx'
 import Icon from '../components/Icon.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import DocumentsPanel from '../components/DocumentsPanel.jsx'
+import DocumentWallet from '../components/DocumentWallet.jsx'
 import EmergencyContacts from '../components/EmergencyContacts.jsx'
 
 export default function Profile() {
@@ -114,6 +115,8 @@ export default function Profile() {
           </p>
         </div>
       </section>
+
+      <DocumentWallet employeeId={employee.id} title="My documents from HR" />
 
       <DocumentsPanel employeeId={employee.id} />
 
