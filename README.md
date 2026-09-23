@@ -78,6 +78,37 @@ Employees tab, the person signs up with that same email, and the signup trigger
 links the two automatically. If someone signs up before HR adds them, they get a
 `pending` record that HR can fill in later.
 
+## Creating logins from the portal
+
+A super admin can create an employee's account with a password they choose —
+no self-signup, no confirmation email.
+
+**Employees → a person → Create login**, or it opens automatically right after
+you add a new employee. Set or generate a password, and the dialog shows the
+credentials once so you can copy and hand them over. For someone who already
+has an account the same button reads **Reset password**.
+
+This needs the Edge Function deployed once:
+
+```bash
+npm install -g supabase
+supabase login
+supabase link --project-ref <your-project-ref>
+supabase functions deploy create-employee-login
+```
+
+**Why a function rather than doing it in the app:** creating an auth account
+requires the `service_role` key, which would be readable by anyone if it shipped
+in a `VITE_` variable. The function holds it server-side, checks the caller's JWT,
+and refuses anyone who is not a super admin.
+
+It also cleans up after itself: if the signup trigger has already made a stray
+record for that email it is removed, and if linking fails the new account is
+deleted rather than left orphaned.
+
+Passwords are never stored anywhere readable — the dialog is the only time it is
+shown. Lost ones are replaced, not recovered.
+
 ## Document wallet
 
 Two document flows, in opposite directions:

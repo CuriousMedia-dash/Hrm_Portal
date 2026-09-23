@@ -18,6 +18,7 @@ import {
 } from '../lib/policy.js'
 import DocumentsPanel from '../components/DocumentsPanel.jsx'
 import DocumentWallet from '../components/DocumentWallet.jsx'
+import LoginCredentials from '../components/LoginCredentials.jsx'
 import EmergencyContacts from '../components/EmergencyContacts.jsx'
 
 const BLANK = {
@@ -29,7 +30,7 @@ const BLANK = {
 }
 
 export default function Employees() {
-  const { isAdmin, employee: me, refreshEmployee } = useAuth()
+  const { isAdmin, isSuperAdmin, employee: me, refreshEmployee } = useAuth()
   const toast = useToast()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -39,6 +40,7 @@ export default function Employees() {
   const [view, setView] = useState('table')
   const [editing, setEditing] = useState(null)
   const [viewing, setViewing] = useState(null)
+  const [credentials, setCredentials] = useState(null)   // { employee, mode }
 
   async function load() {
     setLoading(true)
@@ -217,10 +219,21 @@ export default function Employees() {
               </div>
             </div>
             {isAdmin && (
-              <button type="button" className="btn btn-2" style={{ marginLeft: 'auto' }}
-                onClick={() => { setEditing(viewing); setViewing(null) }}>
-                <Icon name="edit" size={15} /> Edit
-              </button>
+              <div className="row" style={{ marginLeft: 'auto', gap: 8 }}>
+                {isSuperAdmin && (
+                  <button type="button" className="btn btn-2"
+                    onClick={() => setCredentials({
+                      employee: viewing,
+                      mode: viewing.user_id ? 'reset' : 'create'
+                    })}>
+                    <Icon name="key" size={15} /> {viewing.user_id ? 'Reset password' : 'Create login'}
+                  </button>
+                )}
+                <button type="button" className="btn btn-2"
+                  onClick={() => { setEditing(viewing); setViewing(null) }}>
+                  <Icon name="edit" size={15} /> Edit
+                </button>
+              </div>
             )}
           </div>
 
@@ -254,17 +267,30 @@ export default function Employees() {
         </Modal>
       )}
 
+      {credentials && (
+        <LoginCredentials
+          employee={credentials.employee}
+          mode={credentials.mode}
+          onClose={() => setCredentials(null)}
+          onDone={load}
+        />
+      )}
+
       {editing && (
         <EmployeeForm
           value={editing}
           people={rows}
           onClose={() => setEditing(null)}
-          onSaved={async (message) => {
+          onSaved={async (message, createdRecord) => {
             const wasMe = editing.id && editing.id === me?.id
             setEditing(null)
             toast.success(message)
             await load()
             if (wasMe) refreshEmployee()
+            // a brand new person needs a way in: offer it immediately
+            if (createdRecord && isSuperAdmin) {
+              setCredentials({ employee: createdRecord, mode: 'create' })
+            }
           }}
         />
       )}
@@ -336,9 +362,9 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
     }
 
     try {
-      const { error: saveError } = isNew
-        ? await supabase.from('employees').insert(payload)
-        : await supabase.from('employees').update(payload).eq('id', value.id)
+      const { data: saved, error: saveError } = isNew
+        ? await supabase.from('employees').insert(payload).select().single()
+        : await supabase.from('employees').update(payload).eq('id', value.id).select().single()
 
       if (saveError) {
         setError(saveError.code === '23505'
@@ -346,7 +372,10 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
           : saveError.message)
         return
       }
-      onSaved(isNew ? `${payload.full_name} added to the directory.` : 'Changes saved.')
+      onSaved(
+        isNew ? `${payload.full_name} added to the directory.` : 'Changes saved.',
+        isNew ? saved : null
+      )
     } catch (err) {
       // never leave the button spinning on an unexpected failure
       setError(err?.message || 'Something went wrong while saving.')
