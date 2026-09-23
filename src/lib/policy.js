@@ -73,12 +73,38 @@ export function describeDays(days) {
 /* Who is who                                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * What the Portal role dropdown offers.
+ *
+ * 'intern' is not a database role — permissions are identical to an
+ * associate's. Picking it sets employment_type to 'intern', which is what
+ * actually drives the entitlement. Keeping it here means one dropdown
+ * answers "what is this person", and the form keeps the two fields in step.
+ */
 export const ROLES = [
+  { value: 'intern',      label: 'Intern',      hint: 'An associate on one leave day a month, converting after 3 months' },
   { value: 'employee',    label: 'Associate',   hint: 'Own attendance, leave, claims and documents' },
   { value: 'manager',     label: 'Manager',     hint: 'The above, plus approvals for their department' },
   { value: 'hr_admin',    label: 'HR admin',    hint: 'Everyone’s records, approvals and reports' },
   { value: 'super_admin', label: 'Super admin', hint: 'Everything, plus granting roles and deleting people' }
 ]
+
+/** What the dropdown should show for a record: intern wins over the plain role. */
+export function roleSelectValue(form) {
+  return form.employment_type === 'intern' ? 'intern' : form.role
+}
+
+/** Turn a dropdown choice back into the two columns it really sets. */
+export function applyRoleChoice(form, choice) {
+  if (choice === 'intern') {
+    return { role: 'employee', employment_type: 'intern' }
+  }
+  return {
+    role: choice,
+    // leaving intern behind: fall back to full time rather than stranding them
+    employment_type: form.employment_type === 'intern' ? 'full_time' : form.employment_type
+  }
+}
 
 /** The label a person carries in the interface. Interns are associates with a different entitlement. */
 export function tierOf(employee) {

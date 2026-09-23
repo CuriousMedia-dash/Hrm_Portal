@@ -16,6 +16,7 @@ import Modal from '../components/Modal.jsx'
 import RegularizationForm from '../components/RegularizationForm.jsx'
 import RegularizationQueue from '../components/RegularizationQueue.jsx'
 import { monthSummaryCSV, monthDetailCSV, downloadCSV } from '../lib/report.js'
+import { fetchNetworkStatus } from '../lib/network.js'
 import {
   MIN_WORK_HOURS, lateAfterLabel, timeUntilCheckout, hoursWorked
 } from '../lib/policy.js'
@@ -71,6 +72,14 @@ function MyAttendance() {
   const [busy, setBusy] = useState(false)
   const [regs, setRegs] = useState({})            // work_date -> request
   const [regularizing, setRegularizing] = useState(null)
+  const [net, setNet] = useState({ allowed: true, configured: false, unknown: true })
+
+  // whether this browser may mark attendance at all
+  useEffect(() => {
+    let active = true
+    fetchNetworkStatus().then((status) => { if (active) setNet(status) })
+    return () => { active = false }
+  }, [])
 
   const load = useCallback(async () => {
     if (!employee?.id) { setLoading(false); return }
@@ -155,6 +164,7 @@ function MyAttendance() {
     ? hoursBetween(today.check_in, new Date().toISOString())
     : null
   const remaining = today?.check_in && !today?.check_out ? timeUntilCheckout(today.check_in) : null
+  const offNetwork = net.configured && !net.allowed
   const progress = today?.check_in
     ? Math.min(100, (hoursWorked(today.check_in, today.check_out || new Date()) / MIN_WORK_HOURS) * 100)
     : 0
@@ -168,14 +178,18 @@ function MyAttendance() {
             <p className="sub">{formatDate(todayISO())}</p>
           </div>
           <div className="page-actions">
-            {!today?.check_in ? (
+            {offNetwork ? (
+              <span className="chip" title={net.ip ? `Seen from ${net.ip}` : undefined}>
+                <Icon name="alert" size={13} /> Off the office network
+              </span>
+            ) : !today?.check_in ? (
               <button type="button" className="btn" onClick={checkIn} disabled={busy}>
                 {busy ? <span className="spinner" /> : <Icon name="login" size={15} />} Check in
               </button>
             ) : (
               <span className="chip"><Icon name="checkCircle" size={13} /> In at {formatTime(today.check_in)}</span>
             )}
-            {today?.check_in && !today?.check_out && (
+            {!offNetwork && today?.check_in && !today?.check_out && (
               remaining ? (
                 <span className="chip" title={`Minimum ${MIN_WORK_HOURS} hours`}>
                   <Icon name="clock" size={13} /> Check out in {remaining}
@@ -192,6 +206,18 @@ function MyAttendance() {
           </div>
         </div>
         <div className="card-body">
+          {offNetwork && (
+            <div className="alert alert-bad" style={{ marginBottom: 16 }}>
+              <Icon name="alert" size={16} />
+              <span>
+                <strong>You are not on the office network.</strong> Check-in and check-out
+                are only possible from the office
+                {net.ip ? <> — this device appears as <code>{net.ip}</code></> : null}.
+                Ask HR to mark you if you are working elsewhere today.
+              </span>
+            </div>
+          )}
+
           <div className="grid grid-4">
             <StatTile icon="clock" tone="brand" label="Status"
               value={today ? labelOf(ATTENDANCE_STATUSES, today.status) : 'Not marked'}
@@ -315,8 +341,10 @@ function TeamRoster() {
     setLoading(true)
     const { from, to } = monthBounds(date.slice(0, 7))
     const [staff, marks, lates] = await Promise.all([
-      supabase.from('employees').select('id, full_name, email, department, designation')
-        .in('status', ['active', 'on_notice']).order('full_name'),
+      supabase.from('employees').select('id, full_name, email, department, designation, status')
+        // 'pending' means HR has not filled in their details yet — they still
+        // come to work, so they belong on the roster
+        .in('status', ['active', 'on_notice', 'pending']).order('full_name'),
       supabase.from('attendance').select('*').eq('work_date', date),
       // every late arrival in the month the chosen date belongs to
       supabase.from('attendance').select('employee_id')
@@ -505,7 +533,11 @@ function TeamRoster() {
                             <Avatar name={person.full_name} size="sm" />
                             <div className="who">
                               <strong>{person.full_name}</strong>
-                              <span>{person.designation || person.email}</span>
+                              <span>
+                                {person.status === 'pending'
+                                  ? 'Record incomplete — set them Active in Employees'
+                                  : (person.designation || person.email)}
+                              </span>
                             </div>
                           </div>
                         </td>

@@ -13,6 +13,7 @@ import Icon from '../components/Icon.jsx'
 import StatTile from '../components/StatTile.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { SkeletonRows, SkeletonTiles } from '../components/Skeleton.jsx'
+import NetworkSettings from '../components/NetworkSettings.jsx'
 
 /**
  * Everything in flight, company-wide. Super admin only — HR has the same
@@ -128,6 +129,8 @@ export default function Activity() {
             sub: `${row.kind === 'late' ? 'Late arrival' : 'Missed day'} · ${formatDate(row.work_date)}`,
             tail: null
           })} />
+
+        <NetworkSettings />
 
         <section className="card">
           <div className="card-head">

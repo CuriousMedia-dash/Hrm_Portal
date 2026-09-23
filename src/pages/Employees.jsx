@@ -14,7 +14,7 @@ import EmptyState from '../components/EmptyState.jsx'
 import { SkeletonRows } from '../components/Skeleton.jsx'
 import {
   INTERNSHIP_MONTHS, INTERN_WARN_DAYS, NOTICE_WARN_DAYS, addMonths, conversionDate,
-  ROLES, tierOf
+  ROLES, tierOf, roleSelectValue, applyRoleChoice
 } from '../lib/policy.js'
 import DocumentsPanel from '../components/DocumentsPanel.jsx'
 import EmergencyContacts from '../components/EmergencyContacts.jsx'
@@ -415,9 +415,21 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
           <div className="field-row">
             <div className="field">
               <label htmlFor="employment_type">Employment type</label>
-              <select id="employment_type" value={form.employment_type} onChange={set('employment_type')}>
+              <select
+                id="employment_type"
+                value={form.employment_type}
+                onChange={(e) => setForm((f) => ({
+                  ...f,
+                  employment_type: e.target.value,
+                  // an intern cannot also be an approver
+                  role: e.target.value === 'intern' ? 'employee' : f.role
+                }))}
+              >
                 {EMPLOYMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
+              {form.employment_type === 'intern' && (
+                <span className="hint">One leave day a month · converts after {INTERNSHIP_MONTHS} months</span>
+              )}
             </div>
             <div className="field">
               <label htmlFor="status">Status</label>
@@ -450,12 +462,17 @@ function EmployeeForm({ value, people, onClose, onSaved }) {
             </div>
             <div className="field">
               <label htmlFor="role">Portal role</label>
-              <select id="role" value={form.role} onChange={set('role')} disabled={!isSuperAdmin}>
+              <select
+                id="role"
+                value={roleSelectValue(form)}
+                disabled={!isSuperAdmin}
+                onChange={(e) => setForm((f) => ({ ...f, ...applyRoleChoice(f, e.target.value) }))}
+              >
                 {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
               <span className="hint">
                 {isSuperAdmin
-                  ? ROLES.find((r) => r.value === form.role)?.hint
+                  ? ROLES.find((r) => r.value === roleSelectValue(form))?.hint
                   : 'Only a super admin can change someone’s role.'}
               </span>
             </div>

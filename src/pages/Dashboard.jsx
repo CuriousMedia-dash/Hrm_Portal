@@ -15,6 +15,7 @@ import MiniBars from '../components/MiniBars.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { SkeletonRows, SkeletonTiles } from '../components/Skeleton.jsx'
 import { MIN_WORK_HOURS, timeUntilCheckout } from '../lib/policy.js'
+import { fetchNetworkStatus } from '../lib/network.js'
 
 function greeting() {
   const hour = new Date().getHours()
@@ -34,6 +35,13 @@ export default function Dashboard() {
   const [myToday, setMyToday] = useState(null)
   const [week, setWeek] = useState([])
   const [busy, setBusy] = useState(false)
+  const [net, setNet] = useState({ allowed: true, configured: false, unknown: true })
+
+  useEffect(() => {
+    let active = true
+    fetchNetworkStatus().then((status) => { if (active) setNet(status) })
+    return () => { active = false }
+  }, [])
 
   const days = lastNDays(7)
 
@@ -150,6 +158,7 @@ export default function Dashboard() {
   const remaining = myToday?.check_in && !myToday?.check_out
     ? timeUntilCheckout(myToday.check_in)
     : null
+  const offNetwork = net.configured && !net.allowed
   const firstName = (employee?.full_name || '').split(' ')[0] || 'there'
 
   return (
@@ -160,7 +169,11 @@ export default function Dashboard() {
           <p className="sub">{formatDate(todayISO())} · here’s where things stand.</p>
         </div>
         <div className="page-actions">
-          {!myToday?.check_in ? (
+          {offNetwork ? (
+            <span className="chip" title={net.ip ? `Seen from ${net.ip}` : undefined}>
+              <Icon name="alert" size={14} /> Off the office network
+            </span>
+          ) : !myToday?.check_in ? (
             <button type="button" className="btn" onClick={checkIn} disabled={busy || !employee}>
               <Icon name="clock" size={16} /> Check in
             </button>

@@ -147,8 +147,12 @@ the row-level security would not return it even if the panel asked.
 | **Associate** | `role = 'employee'` | Own attendance, leave, claims, documents |
 | **Intern** | `employment_type = 'intern'` | An associate with one leave day per month; internship runs 3 months |
 
-Interns are not a separate role on purpose: their permissions are an
-associate's, only the entitlement differs.
+**Intern appears in the Portal role dropdown**, but it is not a database role —
+choosing it sets `employment_type = 'intern'` and leaves `role = 'employee'`,
+because an intern's permissions are an associate's. The two fields are kept in
+step by the form: picking Intern in either place updates the other, and moving
+someone off Intern returns them to full time. That way one dropdown answers
+"what is this person" without the two columns ever contradicting each other.
 
 **Only a super admin can change a role.** `employees_guard_update()` resets the
 `role` column on any update made by HR, so the tier above them is the only way
@@ -198,6 +202,29 @@ stored in the note.
   late flag, for auditing a particular week.
 
 Both open directly in Excel.
+
+## Office network restriction
+
+Checking in and out requires being on an approved network. Everything else —
+leave, claims, documents, the directory — works from anywhere, so someone off
+sick can still apply for leave.
+
+Manage the list under **Activity → Office network** (super admin). It shows the
+IP you are calling from, so adding the office is one click. A single static IP
+ends in `/32`; a range uses a smaller prefix such as `203.0.113.0/24`.
+
+- **Fails open.** With no active network on the list, nothing is restricted —
+  installing the migration cannot lock anyone out before you configure it.
+- **HR and managers are exempt.** They correct the roster for past days, often
+  from elsewhere, and restricting that helps nobody.
+- Postgres reads the caller's address from the request headers and compares it
+  against `allowed_networks`, so the rule holds even if someone calls the API
+  directly. It reads the **last** `X-Forwarded-For` entry — the one Supabase's
+  edge appends — so a client that injects its own value does not win.
+
+It is a solid deterrent for ordinary staff, not a defence against someone
+actively attacking it. Anyone determined can reach the office network over a
+VPN, and header-based IP detection has limits.
 
 ## Work rules
 
