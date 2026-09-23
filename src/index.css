@@ -845,3 +845,22 @@ tbody tr:hover .row-actions .btn { opacity: 1; }
   margin: 0; padding: 0; opacity: 0; cursor: pointer;
 }
 .datefield > input[type='text']:disabled + .datefield-pick { opacity: .5; cursor: not-allowed; }
+
+/* ---- Notification sections and the 7-day history ------------------- */
+.bell-section {
+  position: sticky; top: 0; z-index: 1;
+  padding: 8px 14px 6px;
+  font-size: .715rem; font-weight: 640; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-3); background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.bell-section + .bell-item { border-top: 0; }
+.bell-when {
+  flex: none; margin-top: 2px; font-size: .72rem; color: var(--ink-3);
+  white-space: nowrap;
+}
+/* history reads as settled, not as something still to do */
+.bell-item.is-past { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
+.bell-item.is-past .bell-text strong { font-weight: 500; color: var(--ink-2); }
+.bell-item.is-past:hover { background: var(--surface-2); }
+.bell-empty + .bell-section { border-top: 1px solid var(--line); }

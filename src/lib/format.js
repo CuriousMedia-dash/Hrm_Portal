@@ -158,3 +158,30 @@ export function workingDaysExcludingHolidays(startISO, endISO, holidays = []) {
     return day !== 0 && day !== 6 && !blocked.has(iso)
   }).length
 }
+
+/** "just now" · "3h ago" · "Yesterday" · "Mon" — for the notification history. */
+export function timeAgo(value) {
+  if (!value) return ''
+  const then = new Date(value)
+  if (Number.isNaN(then.getTime())) return ''
+
+  const mins = Math.floor((Date.now() - then.getTime()) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+
+  const days = Math.floor(hours / 24)
+  if (days === 1) return 'Yesterday'
+  if (days < 7) return then.toLocaleDateString('en-IN', { weekday: 'long' })
+  return shortDate(todayISO(then))
+}
+
+/** Midnight, n days back, as an ISO timestamp — the floor for "last 7 days". */
+export function daysAgoISO(n) {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() - n)
+  return d.toISOString()
+}
