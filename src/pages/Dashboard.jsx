@@ -14,7 +14,7 @@ import Icon from '../components/Icon.jsx'
 import MiniBars from '../components/MiniBars.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { SkeletonRows, SkeletonTiles } from '../components/Skeleton.jsx'
-import { MIN_WORK_HOURS, timeUntilCheckout } from '../lib/policy.js'
+import { MIN_WORK_HOURS, timeUntilCheckout, lateAfterLabel } from '../lib/policy.js'
 import { fetchNetworkStatus } from '../lib/network.js'
 
 function greeting() {
@@ -28,7 +28,7 @@ export default function Dashboard() {
   const { employee, isAdmin } = useAuth()
   const toast = useToast()
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState({ headcount: 0, present: 0, onLeave: 0, pending: 0 })
+  const [stats, setStats] = useState({ headcount: 0, present: 0, late: 0, onLeave: 0, pending: 0 })
   const [pending, setPending] = useState([])
   const [outToday, setOutToday] = useState([])
   const [myLeave, setMyLeave] = useState([])
@@ -57,7 +57,7 @@ export default function Dashboard() {
         if (isAdmin) {
           const [head, todayMarks, outs, queue, weekMarks] = await Promise.all([
             supabase.from('employees').select('id', { count: 'exact', head: true }).eq('status', 'active'),
-            supabase.from('attendance').select('status').eq('work_date', today),
+            supabase.from('attendance').select('status, is_late, late_waived').eq('work_date', today),
             supabase.from('leave_requests')
               .select('id, leave_type, start_date, end_date, employee:employees!leave_requests_employee_id_fkey(full_name, department)')
               .eq('status', 'approved').lte('start_date', today).gte('end_date', today),
@@ -72,9 +72,12 @@ export default function Dashboard() {
           if (err) throw err
 
           const inToday = (todayMarks.data || []).filter((r) => ['present', 'wfh', 'half_day'].includes(r.status)).length
+          // an approved regularization clears the late, so it should not be counted
+          const lateToday = (todayMarks.data || []).filter((r) => r.is_late && !r.late_waived).length
           setStats({
             headcount: head.count ?? 0,
             present: inToday,
+            late: lateToday,
             onLeave: (outs.data || []).length,
             pending: (queue.data || []).length
           })
@@ -198,7 +201,9 @@ export default function Dashboard() {
         <SkeletonTiles count={4} />
       ) : isAdmin ? (
         <div className="grid grid-4">
-          <StatTile icon="users" tone="brand" label="Active headcount" value={stats.headcount} hint="People marked active" />
+          <StatTile icon="clock" tone={stats.late ? 'warn' : 'good'} label="Late today" value={stats.late}
+            suffix={`of ${stats.present}`} hint={`Arrived after ${lateAfterLabel} — open the roster`}
+            to="/attendance?view=roster&sort=late" />
           <StatTile icon="checkCircle" tone="good" label="Marked in today" value={stats.present}
             suffix={`of ${stats.headcount}`} hint="Present or working from home" />
           <StatTile icon="palm" tone="info" label="Out on leave" value={stats.onLeave} hint="Approved leave covering today" />

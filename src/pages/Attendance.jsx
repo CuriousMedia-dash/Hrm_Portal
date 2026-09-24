@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient.js'
 import { useAuth } from '../lib/auth.jsx'
 import { useToast } from '../components/Toast.jsx'
@@ -29,7 +30,17 @@ const PILL_LABEL = { present: 'Present', wfh: 'WFH', leave: 'Leave', absent: 'Ab
 
 export default function Attendance() {
   const { isAdmin, isApprover } = useAuth()
-  const [tab, setTab] = useState('me')
+  const [params, setParams] = useSearchParams()
+
+  // arriving from the dashboard's "Late today" tile: open the roster with
+  // the late people already at the top
+  const [tab, setTab] = useState(() => (params.get('view') === 'roster' ? 'team' : 'me'))
+  const lateFirst = params.get('sort') === 'late'
+
+  const show = (next) => {
+    setTab(next)
+    if (params.has('view') || params.has('sort')) setParams({}, { replace: true })
+  }
 
   return (
     <>
@@ -44,20 +55,20 @@ export default function Attendance() {
         </div>
         {isApprover && (
           <div className="seg">
-            <button type="button" className={tab === 'me' ? 'on' : ''} onClick={() => setTab('me')}>
+            <button type="button" className={tab === 'me' ? 'on' : ''} onClick={() => show('me')}>
               <Icon name="user" size={14} /> Mine
             </button>
-            <button type="button" className={tab === 'team' ? 'on' : ''} onClick={() => setTab('team')}>
+            <button type="button" className={tab === 'team' ? 'on' : ''} onClick={() => show('team')}>
               <Icon name="users" size={14} /> Team roster
             </button>
-            <button type="button" className={tab === 'requests' ? 'on' : ''} onClick={() => setTab('requests')}>
+            <button type="button" className={tab === 'requests' ? 'on' : ''} onClick={() => show('requests')}>
               <Icon name="inbox" size={14} /> Requests
             </button>
           </div>
         )}
       </div>
 
-      {isApprover && tab === 'team' ? <TeamRoster />
+      {isApprover && tab === 'team' ? <TeamRoster lateFirst={lateFirst} />
         : isApprover && tab === 'requests' ? <RegularizationQueue />
         : <MyAttendance />}
     </>
@@ -324,7 +335,7 @@ function MyAttendance() {
 }
 
 /* ------------------------------------------------------------------ */
-function TeamRoster() {
+function TeamRoster({ lateFirst = false }) {
   const { employee: me } = useAuth()
   const toast = useToast()
   const [date, setDate] = useState(todayISO())
@@ -333,7 +344,7 @@ function TeamRoster() {
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState(null)
   const [search, setSearch] = useState('')
-  const [sortByLate, setSortByLate] = useState(false)
+  const [sortByLate, setSortByLate] = useState(lateFirst)
   const [reportOpen, setReportOpen] = useState(false)
   const [reportMonth, setReportMonth] = useState(date.slice(0, 7))
   const [reportBusy, setReportBusy] = useState(false)
