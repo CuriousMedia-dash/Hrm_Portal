@@ -22,8 +22,10 @@ import {
 } from '../lib/policy.js'
 import DateField from '../components/DateField.jsx'
 
-const PILL_STATUSES = ['present', 'wfh', 'half_day', 'leave', 'absent']
-const PILL_LABEL = { present: 'Present', wfh: 'WFH', half_day: 'Half', leave: 'Leave', absent: 'Absent' }
+// Half day is not something Curious Media runs, so it is not offered.
+// Old records that still carry it keep rendering — only marking is gone.
+const PILL_STATUSES = ['present', 'wfh', 'leave', 'absent']
+const PILL_LABEL = { present: 'Present', wfh: 'WFH', leave: 'Leave', absent: 'Absent' }
 
 export default function Attendance() {
   const { isAdmin, isApprover } = useAuth()
@@ -145,7 +147,6 @@ function MyAttendance() {
 
   const summary = useMemo(() => ({
     full: rows.filter((r) => ['present', 'wfh'].includes(r.status)).length,
-    half: rows.filter((r) => r.status === 'half_day').length,
     leave: rows.filter((r) => r.status === 'leave').length,
     absent: rows.filter((r) => r.status === 'absent').length,
     late: rows.filter((r) => r.is_late).length,
@@ -251,7 +252,7 @@ function MyAttendance() {
           <div>
             <h2>My month</h2>
             <p className="sub">
-              {summary.full} full · {summary.half} half · {summary.leave} leave ·{' '}
+              {summary.full} worked · {summary.leave} leave ·{' '}
               <strong style={{ color: summary.late ? 'var(--warn)' : 'inherit' }}>{summary.late} late</strong> ·{' '}
               {Math.round(summary.hours * 10) / 10}h logged
             </p>
@@ -332,7 +333,6 @@ function TeamRoster() {
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState(null)
   const [search, setSearch] = useState('')
-  const [lateCounts, setLateCounts] = useState({})
   const [sortByLate, setSortByLate] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [reportMonth, setReportMonth] = useState(date.slice(0, 7))
@@ -340,25 +340,18 @@ function TeamRoster() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { from, to } = monthBounds(date.slice(0, 7))
-    const [staff, marks, lates] = await Promise.all([
+    const [staff, marks] = await Promise.all([
       supabase.from('employees').select('id, full_name, email, department, designation, status')
         // 'pending' means HR has not filled in their details yet — they still
         // come to work, so they belong on the roster
         .in('status', ['active', 'on_notice', 'pending']).order('full_name'),
-      supabase.from('attendance').select('*').eq('work_date', date),
-      // every late arrival in the month the chosen date belongs to
-      supabase.from('attendance').select('employee_id')
-        .eq('is_late', true).gte('work_date', from).lte('work_date', to)
+      supabase.from('attendance').select('*').eq('work_date', date)
     ])
-    if (staff.error || marks.error || lates.error) {
-      toast.error((staff.error || marks.error || lates.error).message)
+    if (staff.error || marks.error) {
+      toast.error((staff.error || marks.error).message)
     } else {
       setPeople(staff.data || [])
       setRecords(Object.fromEntries((marks.data || []).map((r) => [r.employee_id, r])))
-      const counts = {}
-      for (const row of lates.data || []) counts[row.employee_id] = (counts[row.employee_id] || 0) + 1
-      setLateCounts(counts)
     }
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -426,17 +419,16 @@ function TeamRoster() {
           .filter(Boolean).some((f) => f.toLowerCase().includes(term)))
       : [...people]
     if (sortByLate) {
-      list.sort((a, b) => (lateCounts[b.id] || 0) - (lateCounts[a.id] || 0) ||
-                          a.full_name.localeCompare(b.full_name))
+      const score = (p) => (records[p.id]?.is_late && !records[p.id]?.late_waived ? 1 : 0)
+      list.sort((a, b) => score(b) - score(a) || a.full_name.localeCompare(b.full_name))
     }
     return list
-  }, [people, search, sortByLate, lateCounts])
+  }, [people, search, sortByLate, records])
 
   const marked = people.filter((p) => records[p.id]).length
   const pct = people.length ? Math.round((marked / people.length) * 100) : 0
-  const totalLates = Object.values(lateCounts).reduce((sum, n) => sum + n, 0)
-  const monthLabel = new Date(`${date}T00:00:00`)
-    .toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+  // late on the day being shown, not a running monthly total
+  const lateToday = people.filter((p) => records[p.id]?.is_late && !records[p.id]?.late_waived).length
 
   return (
     <section className="card">
@@ -445,9 +437,9 @@ function TeamRoster() {
           <h2>Roster · {formatDate(date)}</h2>
           <p className="sub">
             {marked} of {people.length} marked ·{' '}
-            <strong style={{ color: totalLates ? 'var(--warn)' : 'inherit' }}>
-              {totalLates} late arrival{totalLates === 1 ? '' : 's'}
-            </strong>{' '}in {monthLabel}
+            <strong style={{ color: lateToday ? 'var(--warn)' : 'inherit' }}>
+              {lateToday} late
+            </strong>
           </p>
         </div>
         <div className="toolbar" style={{ width: 'auto' }}>
@@ -482,7 +474,7 @@ function TeamRoster() {
           <div className="report-choice">
             <div>
               <strong>Summary</strong>
-              <p className="dim">One row per person: present, WFH, half days, leave, absent,
+              <p className="dim">One row per person: present, WFH, leave, absent,
                 late arrivals, days marked and hours logged. This is the one payroll wants.</p>
               <button type="button" className="btn" disabled={reportBusy}
                 onClick={() => downloadReport('summary')}>
@@ -517,8 +509,8 @@ function TeamRoster() {
                     <th>In / out</th>
                     <th className="right">
                       <button type="button" className="th-sort" onClick={() => setSortByLate((v) => !v)}
-                        title="Late arrivals this month — click to sort">
-                        Late (MTD) {sortByLate ? '▾' : ''}
+                        title={`Who arrived after ${lateAfterLabel} on this day — click to sort`}>
+                        Late {sortByLate ? '▾' : ''}
                       </button>
                     </th>
                     <th>Mark</th>
@@ -545,11 +537,10 @@ function TeamRoster() {
                         <td className="dim">{person.department || '—'}</td>
                         <td className="nowrap dim tnum">{formatTime(record?.check_in)} — {formatTime(record?.check_out)}</td>
                         <td className="right">
-                          {lateCounts[person.id]
-                            ? <span className={`late-count ${lateCounts[person.id] >= 3 ? 'high' : ''}`}>
-                                {lateCounts[person.id]}
-                              </span>
-                            : <span className="dim tnum">0</span>}
+                          {!record ? <span className="dim">—</span>
+                            : record.late_waived ? <span className="badge">waived</span>
+                            : record.is_late ? <span className="badge badge-warn">late</span>
+                            : <span className="dim">on time</span>}
                         </td>
                         <td>
                           <div className="pills">

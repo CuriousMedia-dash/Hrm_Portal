@@ -200,7 +200,7 @@ export default function Dashboard() {
         <div className="grid grid-4">
           <StatTile icon="users" tone="brand" label="Active headcount" value={stats.headcount} hint="People marked active" />
           <StatTile icon="checkCircle" tone="good" label="Marked in today" value={stats.present}
-            suffix={`of ${stats.headcount}`} hint="Present, WFH or half day" />
+            suffix={`of ${stats.headcount}`} hint="Present or working from home" />
           <StatTile icon="palm" tone="info" label="Out on leave" value={stats.onLeave} hint="Approved leave covering today" />
           <StatTile icon="inbox" tone="warn" label="Awaiting approval" value={stats.pending}>
             {stats.pending > 0 && <Link className="tile-link" to="/leave">Review requests →</Link>}

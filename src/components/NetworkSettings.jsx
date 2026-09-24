@@ -9,6 +9,27 @@ import EmptyState from './EmptyState.jsx'
 import { SkeletonRows } from './Skeleton.jsx'
 
 /**
+ * Accepts what a person actually types — "103.140.219.90", with or
+ * without a prefix, pasted twice over, or with stray spaces — and returns
+ * a clean CIDR, or null if it is not an address at all.
+ */
+function normaliseCidr(input) {
+  const raw = (input || '').trim()
+  if (!raw) return null
+
+  const parts = raw.split('/')
+  const address = parts[0].trim()
+  if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(address)) return null
+  if (address.split('.').some((n) => Number(n) > 255)) return null
+
+  // several prefixes pasted together: keep the first, ignore the rest
+  const prefix = parts.length > 1 ? Number(parts[1]) : 32
+  if (!Number.isInteger(prefix) || prefix < 8 || prefix > 32) return null
+
+  return `${address}/${prefix}`
+}
+
+/**
  * Which networks may mark attendance. Super admin only.
  * Shows the current IP so adding the office is one click.
  */
@@ -40,11 +61,15 @@ export default function NetworkSettings() {
 
   async function add(event) {
     event.preventDefault()
-    if (!cidr.trim()) { toast.error('Enter an IP address or range.'); return }
+    const entry = normaliseCidr(cidr)
+    if (!entry) {
+      toast.error('Enter an address like 203.0.113.45, or a range like 203.0.113.0/24.')
+      return
+    }
     setBusy(true)
     const { error } = await supabase.from('allowed_networks').insert({
       label: label.trim() || 'Office',
-      cidr: cidr.trim()
+      cidr: entry
     })
     setBusy(false)
     if (error) {

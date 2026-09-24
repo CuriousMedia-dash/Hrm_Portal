@@ -11,5 +11,9 @@ export async function fetchNetworkStatus() {
     // the migration may not be installed yet; don't block anyone over it
     return { ip: null, allowed: true, configured: false, unknown: true }
   }
-  return { unknown: false, ...(data || {}) }
+  const status = { unknown: false, ...(data || {}) }
+  // Postgres hands back an inet, which can carry a /32 it does not need.
+  // Strip it so the address reads cleanly and nothing doubles it up later.
+  if (typeof status.ip === 'string') status.ip = status.ip.replace(/\/\d+$/, '')
+  return status
 }

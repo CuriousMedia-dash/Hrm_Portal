@@ -27,7 +27,7 @@ export function downloadCSV(filename, csv) {
 export function monthSummaryCSV(people, records, monthLabel) {
   const header = [
     'Employee', 'Department', 'Designation', 'Present', 'Work from home',
-    'Half day', 'On leave', 'Absent', 'Holiday', 'Late arrivals',
+    'On leave', 'Absent', 'Holiday', 'Late arrivals',
     'Days marked', 'Hours logged'
   ]
 
@@ -37,7 +37,7 @@ export function monthSummaryCSV(people, records, monthLabel) {
     const hours = mine.reduce((sum, r) => sum + (hoursBetween(r.check_in, r.check_out) || 0), 0)
     return [
       person.full_name, person.department || '', person.designation || '',
-      count('present'), count('wfh'), count('half_day'), count('leave'),
+      count('present'), count('wfh'), count('leave'),
       count('absent'), count('holiday'),
       mine.filter((r) => r.is_late).length,
       mine.length,
