@@ -6,7 +6,7 @@ import {
   LEAVE_TYPES, labelOf, formatDate, formatRange, todayISO,
   workingDaysExcludingHolidays
 } from '../lib/format.js'
-import { INTERN_LEAVE_PER_MONTH } from '../lib/policy.js'
+import { INTERN_LEAVE_PER_MONTH, reviewedBy } from '../lib/policy.js'
 import Avatar from '../components/Avatar.jsx'
 import Badge from '../components/Badge.jsx'
 import Modal from '../components/Modal.jsx'
@@ -81,7 +81,7 @@ function MyLeave() {
     setLoading(true)
     const [reqs, bals] = await Promise.all([
       supabase.from('leave_requests')
-        .select('*, reviewer:employees!leave_requests_reviewed_by_fkey(full_name, role)')
+        .select('*')
         .eq('employee_id', employee.id).order('start_date', { ascending: false }),
       supabase.from('leave_balance_summary').select('*')
         .eq('employee_id', employee.id).eq('year', year)
@@ -227,10 +227,10 @@ function MyLeave() {
                         <td className="dim">{req.reason || '—'}</td>
                         <td>
                           <Badge value={req.status} />
-                          {req.reviewer?.full_name && (
+                          {reviewedBy(req) && (
                             <div className="dim" style={{ fontSize: '.75rem', marginTop: 3 }}>
-                              by {req.reviewer.full_name}
-                              {req.reviewer.role === 'manager' ? ' (manager)' : ' (HR)'}
+                              {req.status === 'approved' ? 'Approved' : req.status === 'rejected' ? 'Rejected' : 'Reviewed'}
+                              {' by '}{reviewedBy(req)}
                               {req.reviewed_at ? ` · ${formatDate(req.reviewed_at)}` : ''}
                             </div>
                           )}
@@ -283,7 +283,7 @@ function Approvals() {
   const load = useCallback(async () => {
     setLoading(true)
     let query = supabase.from('leave_requests')
-      .select('*, employee:employees!leave_requests_employee_id_fkey(full_name, department, email), reviewer:employees!leave_requests_reviewed_by_fkey(full_name, role)')
+      .select('*, employee:employees!leave_requests_employee_id_fkey(full_name, department, email)')
       .order('start_date', { ascending: false })
     if (status !== 'all') query = query.eq('status', status)
     const { data, error } = await query
@@ -363,9 +363,10 @@ function Approvals() {
                         <td className="dim">{req.reason || '—'}</td>
                         <td>
                           <Badge value={req.status} />
-                          {req.reviewer?.full_name && (
+                          {reviewedBy(req) && (
                             <div className="dim" style={{ fontSize: '.75rem', marginTop: 3 }}>
-                              by {req.reviewer.full_name}{req.reviewer.role === 'manager' ? ' (manager)' : ' (HR)'}
+                              {req.status === 'approved' ? 'Approved' : req.status === 'rejected' ? 'Rejected' : 'Reviewed'}
+                              {' by '}{reviewedBy(req)}
                             </div>
                           )}
                         </td>

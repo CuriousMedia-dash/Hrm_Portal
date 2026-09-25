@@ -18,6 +18,8 @@ const NAV = [
   { to: '/leave',      label: 'Leave',      icon: 'calendar', section: 'People' },
   { to: '/reimbursements', label: 'Reimbursements', icon: 'wallet', section: 'People' },
   { to: '/holidays',   label: 'Holidays',   icon: 'gift',     section: 'Company' },
+  { to: '/policies',   label: 'Policies',   icon: 'inbox',    section: 'Company' },
+  { to: '/departments', label: 'Departments', icon: 'users',  section: 'Company', adminOnly: true },
   { to: '/profile',    label: 'My profile', icon: 'user',     section: 'Account' }
 ]
 
@@ -28,8 +30,17 @@ const TITLES = {
   '/leave': 'Leave',
   '/reimbursements': 'Reimbursements',
   '/holidays': 'Holiday calendar',
+  '/policies': 'Policies',
+  '/departments': 'Departments',
   '/activity': 'Company activity',
   '/profile': 'My profile'
+}
+
+/** Nested routes such as /departments/<id> keep their parent's title. */
+function titleFor(pathname) {
+  if (TITLES[pathname]) return TITLES[pathname]
+  const parent = Object.keys(TITLES).find((key) => key !== '/' && pathname.startsWith(`${key}/`))
+  return parent ? TITLES[parent] : 'HRM Portal'
 }
 
 export default function Layout() {
@@ -136,7 +147,7 @@ export default function Layout() {
           <button type="button" className="icon-btn rail-toggle" onClick={() => setOpen((o) => !o)} aria-label="Menu">
             <Icon name="menu" size={19} />
           </button>
-          <h1>{TITLES[location.pathname] || 'HRM Portal'}</h1>
+          <h1>{titleFor(location.pathname)}</h1>
           <div className="topbar-right">
             <span className="topbar-date">{formatDate(todayISO())}</span>
             <LateCounter />

@@ -9,6 +9,7 @@ import Icon from './Icon.jsx'
 import Modal from './Modal.jsx'
 import EmptyState from './EmptyState.jsx'
 import { SkeletonRows } from './Skeleton.jsx'
+import { reviewedBy } from '../lib/policy.js'
 
 const KIND_LABEL = { late: 'Late arrival', absent: 'Missed day', missed_checkout: 'No check-out' }
 
@@ -26,7 +27,7 @@ export default function RegularizationQueue() {
   const load = useCallback(async () => {
     setLoading(true)
     let query = supabase.from('regularizations')
-      .select('*, employee:employees!regularizations_employee_id_fkey(full_name, department, designation), reviewer:employees!regularizations_reviewed_by_fkey(full_name, role)')
+      .select('*, employee:employees!regularizations_employee_id_fkey(full_name, department, designation)')
       .order('work_date', { ascending: false })
     if (status !== 'all') query = query.eq('status', status)
     const { data, error } = await query
@@ -107,9 +108,10 @@ export default function RegularizationQueue() {
                         <td style={{ maxWidth: 320 }}>{row.reason}</td>
                         <td>
                           <Badge value={row.status} />
-                          {row.reviewer?.full_name && (
+                          {reviewedBy(row) && (
                             <div className="dim" style={{ fontSize: '.75rem', marginTop: 3 }}>
-                              by {row.reviewer.full_name}{row.reviewer.role === 'manager' ? ' (manager)' : ' (HR)'}
+                              {row.status === 'approved' ? 'Approved' : row.status === 'rejected' ? 'Rejected' : 'Reviewed'}
+                              {' by '}{reviewedBy(row)}
                             </div>
                           )}
                           {row.review_note && <div className="dim" style={{ fontSize: '.75rem' }}>{row.review_note}</div>}

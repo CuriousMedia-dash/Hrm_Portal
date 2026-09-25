@@ -117,3 +117,18 @@ export function tierOf(employee) {
 }
 
 export const INTERN_LEAVE_PER_MONTH = 1
+
+/**
+ * "Pooja (manager)" — who decided a leave request, claim or
+ * regularization. Reads the name stamped on the row at decision time,
+ * because an ordinary employee cannot read the approver's directory
+ * record to look it up.
+ */
+export function reviewedBy(row) {
+  const name = row?.reviewed_by_name
+  if (!name) return ''
+  const role = row.reviewed_by_role
+  if (role === 'manager') return `${name} (manager)`
+  if (role === 'hr_admin' || role === 'super_admin') return `${name} (HR)`
+  return name
+}

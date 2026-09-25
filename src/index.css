@@ -251,6 +251,7 @@ code, .mono {
 .grid { display: grid; gap: 16px; }
 .grid-4 { grid-template-columns: repeat(auto-fit, minmax(198px, 1fr)); }
 .grid-2 { grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+.grid-3 { grid-template-columns: repeat(auto-fit, minmax(258px, 1fr)); }
 .grid-wide { grid-template-columns: 1.55fr 1fr; align-items: start; }
 @media (max-width: 1000px) { .grid-wide { grid-template-columns: 1fr; } }
 

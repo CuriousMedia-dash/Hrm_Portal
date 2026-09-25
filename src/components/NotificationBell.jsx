@@ -8,7 +8,8 @@ import {
 import { formatMoney, EXPENSE_CATEGORIES } from '../lib/reimbursements.js'
 import { REQUIRED_DOCS } from '../lib/documents.js'
 import {
-  conversionDate, daysUntil, describeDays, INTERN_WARN_DAYS, NOTICE_WARN_DAYS
+  conversionDate, daysUntil, describeDays, reviewedBy,
+  INTERN_WARN_DAYS, NOTICE_WARN_DAYS
 } from '../lib/policy.js'
 import Icon from './Icon.jsx'
 import Avatar from './Avatar.jsx'
@@ -39,12 +40,6 @@ function birthdayDaysPast(dob) {
   let marker = new Date(today.getFullYear(), born.getMonth(), born.getDate())
   if (marker > today) marker = new Date(today.getFullYear() - 1, born.getMonth(), born.getDate())
   return Math.round((today - marker) / 86400000)
-}
-
-const reviewerLabel = (reviewer) => {
-  if (!reviewer?.full_name) return ''
-  const who = reviewer.role === 'manager' ? 'manager' : reviewer.role === 'employee' ? '' : 'HR'
-  return who ? `${reviewer.full_name} (${who})` : reviewer.full_name
 }
 
 export default function NotificationBell() {
@@ -81,15 +76,15 @@ export default function NotificationBell() {
 
             // ---- the last seven days, whoever decided them ----
             supabase.from('leave_requests')
-              .select('id, leave_type, start_date, end_date, status, reviewed_at, employee:employees!leave_requests_employee_id_fkey(full_name), reviewer:employees!leave_requests_reviewed_by_fkey(full_name, role)')
+              .select('id, leave_type, start_date, end_date, status, reviewed_at, reviewed_by_name, reviewed_by_role, employee:employees!leave_requests_employee_id_fkey(full_name)')
               .in('status', ['approved', 'rejected', 'cancelled'])
               .gte('reviewed_at', since).order('reviewed_at', { ascending: false }).limit(30),
             supabase.from('reimbursements')
-              .select('id, category, amount, status, reviewed_at, employee:employees!reimbursements_employee_id_fkey(full_name), reviewer:employees!reimbursements_reviewed_by_fkey(full_name, role)')
+              .select('id, category, amount, status, reviewed_at, reviewed_by_name, reviewed_by_role, employee:employees!reimbursements_employee_id_fkey(full_name)')
               .in('status', ['approved', 'rejected', 'paid'])
               .gte('reviewed_at', since).order('reviewed_at', { ascending: false }).limit(30),
             supabase.from('regularizations')
-              .select('id, work_date, kind, status, reviewed_at, employee:employees!regularizations_employee_id_fkey(full_name), reviewer:employees!regularizations_reviewed_by_fkey(full_name, role)')
+              .select('id, work_date, kind, status, reviewed_at, reviewed_by_name, reviewed_by_role, employee:employees!regularizations_employee_id_fkey(full_name)')
               .in('status', ['approved', 'rejected'])
               .gte('reviewed_at', since).order('reviewed_at', { ascending: false }).limit(30)
           ])
@@ -162,7 +157,7 @@ export default function NotificationBell() {
 
         // ---- history ----
         for (const row of doneLeave.data || []) {
-          const by = reviewerLabel(row.reviewer)
+          const by = reviewedBy(row)
           next.push({
             id: `h-leave-${row.id}`, recent: true, at: row.reviewed_at,
             kind: row.status === 'approved' ? 'ok' : 'bad', person: row.employee?.full_name,
@@ -176,7 +171,7 @@ export default function NotificationBell() {
         }
 
         for (const row of doneClaims.data || []) {
-          const by = reviewerLabel(row.reviewer)
+          const by = reviewedBy(row)
           next.push({
             id: `h-claim-${row.id}`, recent: true, at: row.reviewed_at,
             kind: row.status === 'rejected' ? 'bad' : 'ok', person: row.employee?.full_name,
@@ -187,7 +182,7 @@ export default function NotificationBell() {
         }
 
         for (const row of doneRegs.data || []) {
-          const by = reviewerLabel(row.reviewer)
+          const by = reviewedBy(row)
           next.push({
             id: `h-reg-${row.id}`, recent: true, at: row.reviewed_at,
             kind: row.status === 'approved' ? 'ok' : 'bad', person: row.employee?.full_name,
@@ -215,17 +210,17 @@ export default function NotificationBell() {
       } else {
         const [mine, myClaims, docs, contacts, myRegs] = await Promise.all([
           supabase.from('leave_requests')
-            .select('id, leave_type, start_date, end_date, status, review_note, created_at, reviewed_at, reviewer:employees!leave_requests_reviewed_by_fkey(full_name, role)')
+            .select('id, leave_type, start_date, end_date, status, review_note, created_at, reviewed_at, reviewed_by_name, reviewed_by_role')
             .eq('employee_id', employee.id)
             .order('updated_at', { ascending: false }).limit(25),
           supabase.from('reimbursements')
-            .select('id, category, amount, status, review_note, created_at, reviewed_at, reviewer:employees!reimbursements_reviewed_by_fkey(full_name, role)')
+            .select('id, category, amount, status, review_note, created_at, reviewed_at, reviewed_by_name, reviewed_by_role')
             .eq('employee_id', employee.id)
             .order('updated_at', { ascending: false }).limit(25),
           supabase.from('employee_documents').select('doc_type').eq('employee_id', employee.id),
           supabase.from('emergency_contacts').select('id').eq('employee_id', employee.id),
           supabase.from('regularizations')
-            .select('id, work_date, kind, status, review_note, created_at, reviewed_at, reviewer:employees!regularizations_reviewed_by_fkey(full_name, role)')
+            .select('id, work_date, kind, status, review_note, created_at, reviewed_at, reviewed_by_name, reviewed_by_role')
             .eq('employee_id', employee.id)
             .order('updated_at', { ascending: false }).limit(25)
         ])
@@ -234,7 +229,7 @@ export default function NotificationBell() {
         const stillRelevant = (row) => row.status === 'pending' || (row.reviewed_at || '') >= since
 
         for (const row of (mine.data || []).filter(stillRelevant)) {
-          const by = reviewerLabel(row.reviewer)
+          const by = reviewedBy(row)
           if (row.status === 'pending') {
             next.push({
               id: `ml-${row.id}`, kind: 'leave', at: row.created_at,
@@ -257,7 +252,7 @@ export default function NotificationBell() {
         }
 
         for (const row of (myClaims.data || []).filter(stillRelevant)) {
-          const by = reviewerLabel(row.reviewer)
+          const by = reviewedBy(row)
           next.push({
             id: `mc-${row.id}`, recent: row.status !== 'pending',
             at: row.status === 'pending' ? row.created_at : row.reviewed_at,
@@ -272,7 +267,7 @@ export default function NotificationBell() {
         }
 
         for (const row of (myRegs.data || []).filter(stillRelevant)) {
-          const by = reviewerLabel(row.reviewer)
+          const by = reviewedBy(row)
           next.push({
             id: `mr-${row.id}`, recent: row.status !== 'pending',
             at: row.status === 'pending' ? row.created_at : row.reviewed_at,
