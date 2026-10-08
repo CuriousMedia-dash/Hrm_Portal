@@ -49,7 +49,7 @@ create table if not exists public.attendance (
   check_in    timestamptz,
   check_out   timestamptz,
   note        text,
-  is_late     boolean not null default false,   -- set by the trigger below, after 10:20 IST
+  is_late     boolean not null default false,   -- set by the trigger below, from 10:21 IST
   marked_by   uuid references public.employees(id) on delete set null,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
@@ -614,7 +614,7 @@ $$;
 -- 8. Attendance rules: late marking and the 8-hour day
 -- =====================================================================
 
--- Late arrivals — anything after 10:20 India time
+-- Late arrivals — from 10:21 India time (10:20 is still on time)
 -- ---------------------------------------------------------------------
 create or replace function public.mark_late()
 returns trigger language plpgsql set search_path = public as $$
@@ -622,7 +622,7 @@ begin
   new.is_late :=
     new.check_in is not null
     and new.status in ('present','wfh','half_day')
-    and (new.check_in at time zone 'Asia/Kolkata')::time > time '10:20';
+    and (new.check_in at time zone 'Asia/Kolkata')::time >= time '10:21';
   return new;
 end;
 $$;
@@ -635,7 +635,7 @@ create trigger attendance_mark_late before insert or update on public.attendance
 update public.attendance
    set is_late = (check_in is not null
                   and status in ('present','wfh','half_day')
-                  and (check_in at time zone 'Asia/Kolkata')::time > time '10:20')
+                  and (check_in at time zone 'Asia/Kolkata')::time >= time '10:21')
  where check_in is not null;
 
 -- ---------------------------------------------------------------------
@@ -817,7 +817,7 @@ begin
   new.is_late :=
     new.check_in is not null
     and new.status in ('present','wfh','half_day')
-    and (new.check_in at time zone 'Asia/Kolkata')::time > time '10:20'
+    and (new.check_in at time zone 'Asia/Kolkata')::time >= time '10:21'
     and not coalesce(new.late_waived, false);
   return new;
 end;

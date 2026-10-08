@@ -1,9 +1,9 @@
-/ **
+/**
  * Company work rules, in one place.
  * The database enforces the same two numbers — see supabase/add_work_rules.sql.
  * Change them in both places or they will disagree.
  */
-export const LATE_AFTER = { hour: 10, minute: 21 }   // arrivals after  10:20 are late
+export const LATE_AFTER = { hour: 10, minute: 20 }   // 10:20 is on time; 10:21 is late
 export const MIN_WORK_HOURS = 8                       // hours before check-out is allowed
 export const INTERNSHIP_MONTHS = 3                    // intern -> full time
 export const NOTICE_WARN_DAYS = 15                    // warn this far before the last working day

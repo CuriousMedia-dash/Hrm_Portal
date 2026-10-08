@@ -3,7 +3,7 @@
 --
 --   1. Unpaid leave becomes maternity leave
 --   2. Notice period and internship end dates on the employee record
---   3. Arrival after 10:20 IST is marked late
+--   3. Arrival from 10:21 IST is marked late
 --   4. Check-out blocked until 8 hours after check-in
 --
 -- Run once in Supabase > SQL Editor. Safe to re-run.
@@ -55,7 +55,7 @@ comment on column public.employees.internship_end_date is
   'When the internship converts. Defaults to joining date + 3 months if left empty.';
 
 -- ---------------------------------------------------------------------
--- 3. Late arrivals — anything after 10:20 India time
+-- 3. Late arrivals — from 10:21 India time (10:20 is still on time)
 -- ---------------------------------------------------------------------
 alter table public.attendance add column if not exists is_late boolean not null default false;
 
@@ -65,7 +65,7 @@ begin
   new.is_late :=
     new.check_in is not null
     and new.status in ('present','wfh','half_day')
-    and (new.check_in at time zone 'Asia/Kolkata')::time > time '10:20';
+    and (new.check_in at time zone 'Asia/Kolkata')::time >= time '10:21';
   return new;
 end;
 $$;
@@ -78,7 +78,7 @@ create trigger attendance_mark_late before insert or update on public.attendance
 update public.attendance
    set is_late = (check_in is not null
                   and status in ('present','wfh','half_day')
-                  and (check_in at time zone 'Asia/Kolkata')::time > time '10:20')
+                  and (check_in at time zone 'Asia/Kolkata')::time >= time '10:21')
  where check_in is not null;
 
 -- ---------------------------------------------------------------------

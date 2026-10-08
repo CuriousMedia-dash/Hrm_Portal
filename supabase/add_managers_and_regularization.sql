@@ -153,7 +153,7 @@ begin
   new.is_late :=
     new.check_in is not null
     and new.status in ('present','wfh','half_day')
-    and (new.check_in at time zone 'Asia/Kolkata')::time > time '10:20'
+    and (new.check_in at time zone 'Asia/Kolkata')::time >= time '10:21'
     and not coalesce(new.late_waived, false);
   return new;
 end;

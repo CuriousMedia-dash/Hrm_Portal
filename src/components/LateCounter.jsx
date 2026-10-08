@@ -8,7 +8,7 @@ import Icon from './Icon.jsx'
 
 /**
  * Your late arrivals this month, sitting beside the notification bell.
- * Counts what the database marked late (after 10:20 IST), not a guess.
+ * Counts what the database marked late (10:21 IST or later), not a guess.
  */
 export default function LateCounter() {
   const { employee } = useAuth()
